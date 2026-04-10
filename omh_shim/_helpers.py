@@ -78,24 +78,16 @@ def unit_value(
 def build_header(
     schema_id: str,
     *,
-    source_name: str = "omh-shim",
     external_datasheets: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Build an IEEE 1752.1 / OMH data-point header matching the JHE envelope.
+    """Build an IEEE 1752.1 data-point header per ``header-1.0.json``.
 
-    Produces the ``header`` half of the standard data-point structure::
+    Properties conform to the IEEE 1752.1 header schema:
+    ``uuid``, ``schema_id``, ``source_creation_date_time`` (required);
+    ``modality``, ``external_datasheets`` (optional).
 
-        {
-          "header": {
-            "uuid": "...",
-            "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
-            "source_creation_date_time": "...",
-            "modality": "sensed",
-            "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "..."}],
-            "acquisition_provenance": {"source_name": "..."}
-          },
-          "body": { ... }
-        }
+    ``acquisition_provenance`` is NOT included — it belongs to the older
+    OMH data-point schema, not the IEEE 1752.1 standard.
     """
     namespace, name, version = schema_id.split(":", 2)
     header: dict[str, Any] = {
@@ -107,9 +99,6 @@ def build_header(
         },
         "source_creation_date_time": isoformat(datetime.now(UTC)),
         "modality": "sensed",
-        "acquisition_provenance": {
-            "source_name": source_name,
-        },
     }
     if external_datasheets:
         header["external_datasheets"] = external_datasheets

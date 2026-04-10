@@ -9,6 +9,7 @@ ref resolution can be served from local files without network access.
 import importlib.resources
 import json
 from functools import lru_cache
+from typing import Any
 
 from jsonschema import Draft7Validator
 from referencing import Registry, Resource
@@ -16,6 +17,15 @@ from referencing.jsonschema import DRAFT7
 
 from omh_shim._schema_loader import load as load_schema
 from omh_shim.errors import ValidationError
+
+
+# maxsize is bounded to a small constant: there are currently 6 top-level
+# schema ids (see omh_shim.SCHEMA_IDS). 16 leaves room for future types
+# without making the cache unbounded.
+@lru_cache(maxsize=16)
+def _validator(schema_id: str) -> Draft7Validator:
+    """Cached Draft7Validator per schema id. Built once, reused across calls."""
+    return Draft7Validator(load_schema(schema_id), registry=_registry())
 
 
 @lru_cache(maxsize=1)
@@ -33,15 +43,16 @@ def _registry() -> Registry:
     return Registry().with_resources(resources)
 
 
-def validate_output(output: dict, schema_id: str) -> None:
+def validate_output(output: dict[str, Any], schema_id: str) -> None:
     """Validate ``output`` against the OMH schema identified by ``schema_id``.
 
     Raises ``ValidationError`` with a human-readable message listing all
     violations. Returns ``None`` on success.
     """
-    schema = load_schema(schema_id)
-    validator = Draft7Validator(schema, registry=_registry())
-    errors = sorted(validator.iter_errors(output), key=lambda e: list(e.absolute_path))
+    errors = sorted(
+        _validator(schema_id).iter_errors(output),
+        key=lambda e: list(e.absolute_path),
+    )
     if not errors:
         return
     pieces = []

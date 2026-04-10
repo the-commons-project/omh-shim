@@ -1,7 +1,8 @@
 """Shared helpers for source converters."""
 
+import uuid
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 
 from omh_shim.errors import ConversionError
@@ -72,6 +73,36 @@ def unit_value(
 ) -> dict[str, Any]:
     """OMH unit_value: ``{"value": cast(value), "unit": unit}``."""
     return {"value": cast(value), "unit": unit}
+
+
+def build_header(
+    schema_id: str,
+    *,
+    external_datasheets: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Build an IEEE 1752.1 data-point header per ``header-1.0.json``.
+
+    Properties conform to the IEEE 1752.1 header schema:
+    ``uuid``, ``schema_id``, ``source_creation_date_time`` (required);
+    ``modality``, ``external_datasheets`` (optional).
+
+    ``acquisition_provenance`` is NOT included — it belongs to the older
+    OMH data-point schema, not the IEEE 1752.1 standard.
+    """
+    namespace, name, version = schema_id.split(":", 2)
+    header: dict[str, Any] = {
+        "uuid": str(uuid.uuid4()),
+        "schema_id": {
+            "namespace": namespace,
+            "name": name,
+            "version": version,
+        },
+        "source_creation_date_time": isoformat(datetime.now(UTC)),
+        "modality": "sensed",
+    }
+    if external_datasheets:
+        header["external_datasheets"] = external_datasheets
+    return header
 
 
 def set_optional(

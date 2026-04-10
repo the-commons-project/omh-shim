@@ -6,6 +6,7 @@ from types import MappingProxyType
 from typing import Any
 
 from omh_shim import _dispatch, _schema_loader, _validate
+from omh_shim._helpers import build_header
 from omh_shim.errors import ConversionError, ValidationError
 
 __all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
@@ -42,21 +43,37 @@ def convert(
     *,
     tz: tzinfo | None = None,
     validate: bool = True,
+    header: bool = False,
+    external_datasheets: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Convert one source sample to one Open mHealth record.
 
     ``tz`` is required for daily data types (step_count, physical_activity,
-    sleep_duration) — pass ``datetime.UTC`` or a ``ZoneInfo``. Raises
-    ``ConversionError`` on invalid input, ``ValidationError`` on schema
-    mismatch (when ``validate=True``).
+    sleep_duration) — pass ``datetime.UTC`` or a ``ZoneInfo``.
+
+    When ``header=True``, wraps the output in the IEEE 1752.1 data-point
+    envelope (``header`` + ``body``) with UUID, schema_id components,
+    creation timestamp, modality, and optional ``external_datasheets``.
+
+    Raises ``ConversionError`` on invalid input, ``ValidationError`` on
+    schema mismatch (when ``validate=True``).
     """
     converter = _dispatch.lookup(source, data_type)
     try:
-        output = converter(sample, tz=tz)
+        body = converter(sample, tz=tz)
     except (KeyError, ValueError, TypeError) as e:
         raise ConversionError(
             f"{source}/{data_type}: {type(e).__name__}: {e}"
         ) from e
+    schema_id = SCHEMA_IDS[data_type]
     if validate:
-        _validate.validate_output(output, SCHEMA_IDS[data_type])
-    return output
+        _validate.validate_output(body, schema_id)
+    if not header:
+        return body
+    return {
+        "header": build_header(
+            schema_id,
+            external_datasheets=external_datasheets,
+        ),
+        "body": body,
+    }

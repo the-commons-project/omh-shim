@@ -1,16 +1,20 @@
 """Parameterized tests for all source converters.
 
 One fixture pair per (source, data_type) under ``tests/fixtures/<source>/``.
-``convert()`` validates each output against its target OMH schema by default,
+``convert()`` validates each output against its target schema by default,
 so a green test is also a passing schema validation.
+
+Daily types are called with ``tz=UTC`` to match the UTC-anchored expected
+fixtures; the non-UTC behavior is covered in ``test_core.py``.
 """
 
 import json
+from datetime import UTC
 from pathlib import Path
 
 import pytest
 
-from omh_shim import convert
+from omh_shim import ConversionError, convert
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -31,7 +35,7 @@ def test_converter_matches_expected(source, data_type):
     fixture_dir = FIXTURES / source
     sample = json.loads((fixture_dir / f"{data_type}_input.json").read_text())
     expected = json.loads((fixture_dir / f"{data_type}_expected.json").read_text())
-    assert convert(source=source, data_type=data_type, sample=sample) == expected
+    assert convert(source=source, data_type=data_type, sample=sample, tz=UTC) == expected
 
 
 # --- source-specific edge cases ---
@@ -40,7 +44,7 @@ def test_converter_matches_expected(source, data_type):
 def test_oura_hrv_rejects_normalized_score():
     """Oura's daily_readiness contributors.hrv_balance is a 0-100 score, not ms."""
     sample = {"day": "2026-04-09", "score": 85, "contributors": {"hrv_balance": 70}}
-    with pytest.raises(KeyError, match="rmssd"):
+    with pytest.raises(ConversionError, match="rmssd"):
         convert(source="oura_raw", data_type="heart_rate_variability", sample=sample)
 
 
@@ -57,7 +61,12 @@ def test_oura_sleep_episode_nap_is_not_main_sleep():
 
 
 def test_oura_physical_activity_omits_optional_fields_when_absent():
-    result = convert(source="oura_raw", data_type="physical_activity", sample={"day": "2026-04-09"})
+    result = convert(
+        source="oura_raw",
+        data_type="physical_activity",
+        sample={"day": "2026-04-09"},
+        tz=UTC,
+    )
     assert "distance" not in result
     assert "kcal_burned" not in result
 
@@ -78,8 +87,13 @@ def test_ow_step_count_accepts_timeseries_shape():
 
 
 def test_ow_step_count_rejects_unknown_shape():
-    with pytest.raises(KeyError):
-        convert(source="ow_normalized", data_type="step_count", sample={"foo": "bar"})
+    with pytest.raises(ConversionError):
+        convert(
+            source="ow_normalized",
+            data_type="step_count",
+            sample={"foo": "bar"},
+            tz=UTC,
+        )
 
 
 def test_ow_physical_activity_omits_optional_fields_when_absent():
@@ -87,6 +101,7 @@ def test_ow_physical_activity_omits_optional_fields_when_absent():
         source="ow_normalized",
         data_type="physical_activity",
         sample={"date": "2026-04-09", "steps": 100},
+        tz=UTC,
     )
     assert "distance" not in result
     assert "kcal_burned" not in result

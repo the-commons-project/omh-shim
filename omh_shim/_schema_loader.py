@@ -7,14 +7,14 @@ from the id by replacing ``:`` with ``_`` and ``.`` with ``-``, then appending
 
 import importlib.resources
 import json
-from functools import lru_cache
+from functools import cache
 
 
 def _id_to_filename(schema_id: str) -> str:
     return schema_id.replace(":", "_").replace(".", "-") + ".json"
 
 
-@lru_cache(maxsize=None)
+@cache
 def load(schema_id: str) -> dict:
     """Load the vendored JSON schema with the given OMH id.
 

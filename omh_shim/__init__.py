@@ -65,5 +65,5 @@ def convert(
 
 
 # Source packages register themselves on import.
-import omh_shim.sources.ow_normalized  # noqa: E402, F401
 import omh_shim.sources.oura_raw  # noqa: E402, F401
+import omh_shim.sources.ow_normalized  # noqa: E402, F401

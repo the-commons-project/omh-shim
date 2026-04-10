@@ -5,21 +5,21 @@ factoring keeps converter modules focused on field mapping rather than on
 date math and dict-shape boilerplate.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
 def parse_datetime(value: Any) -> datetime:
     """Parse an ISO-8601 datetime string. Naive results are coerced to UTC."""
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     if not isinstance(value, str):
         raise ValueError(f"expected ISO-8601 datetime string, got {type(value).__name__}")
     s = value.strip()
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
     dt = datetime.fromisoformat(s)
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def isoformat(dt: datetime) -> str:
@@ -34,7 +34,7 @@ def day_interval(date_str: str) -> dict:
     and ``end_date_time`` shaped per the OMH time-interval schema's third
     ``oneOf`` branch.
     """
-    start = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+    start = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
     end = start + timedelta(days=1)
     return {
         "start_date_time": isoformat(start),

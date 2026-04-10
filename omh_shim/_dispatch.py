@@ -10,24 +10,12 @@ from omh_shim.sources import oura_raw, ow_normalized
 
 
 class _Converter(Protocol):
-    """Every converter takes a read-only sample mapping and a keyword-only
-    timezone, returning a fresh dict-shaped record conforming to its target
-    schema. Daily converters require a non-None ``tz``; timestamp-based
-    converters accept ``None`` but must still receive the kwarg.
-
-    The uniform signature is deliberate. An alternative design with two
-    protocols (one daily, one timestamp) would force ``convert()`` to branch
-    on ``data_type`` at dispatch time — more code, more tests, no benefit
-    for the caller. Runtime rejection of ``tz=None`` for daily types (via
-    ``day_interval``) is the simpler correct behavior.
-    """
-
     def __call__(
         self, sample: Mapping[str, Any], *, tz: tzinfo | None
     ) -> dict[str, Any]: ...
 
 
-_REGISTRY_SOURCE: dict[tuple[str, str], _Converter] = {
+REGISTRY: Mapping[tuple[str, str], _Converter] = MappingProxyType({
     ("oura_raw", "heart_rate"):              oura_raw.heart_rate,
     ("oura_raw", "heart_rate_variability"):  oura_raw.heart_rate_variability,
     ("oura_raw", "step_count"):              oura_raw.step_count,
@@ -40,11 +28,7 @@ _REGISTRY_SOURCE: dict[tuple[str, str], _Converter] = {
     ("ow_normalized", "sleep_duration"):         ow_normalized.sleep_duration,
     ("ow_normalized", "sleep_episode"):          ow_normalized.sleep_episode,
     ("ow_normalized", "physical_activity"):      ow_normalized.physical_activity,
-}
-
-# Public view is a read-only proxy so consumers can enumerate the registry
-# without being able to mutate it.
-REGISTRY: Mapping[tuple[str, str], _Converter] = MappingProxyType(_REGISTRY_SOURCE)
+})
 
 
 def lookup(source: str, data_type: str) -> _Converter:

@@ -1,9 +1,4 @@
-"""Shared helpers for source converters.
-
-Small building blocks used by every converter: datetime parsing/formatting,
-time-interval construction, and the ``{"value": x, "unit": "..."}`` dict
-shape that OMH uses for every quantitative field.
-"""
+"""Shared helpers for source converters."""
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, tzinfo
@@ -13,12 +8,9 @@ from omh_shim.errors import ConversionError
 
 
 def parse_datetime(value: Any) -> datetime:
-    """Parse an ISO-8601 datetime string into a timezone-aware datetime.
+    """Parse an ISO-8601 string into a timezone-aware datetime.
 
-    Raises ``ConversionError`` for naive datetimes (no tzinfo). Silent UTC
-    coercion is a data-quality footgun — a Tokyo user's "22:30" without an
-    offset must not be recorded as UTC. Callers must provide explicit
-    timezone offsets in their input data.
+    Rejects naive datetimes — silent UTC coercion is a clinical-data footgun.
     """
     if isinstance(value, datetime):
         dt = value
@@ -48,17 +40,12 @@ def isoformat(dt: datetime) -> str:
 
 
 def day_interval(date_str: str, *, tz: tzinfo | None) -> dict[str, Any]:
-    """OMH ``time_interval`` covering one calendar day in the given timezone.
-
-    ``tz`` is REQUIRED (pass ``datetime.UTC`` explicitly when you mean UTC).
-    A "day" in Tokyo is not a "day" in UTC; silently defaulting to UTC
-    would misalign daily summaries by up to 24 hours for any non-UTC user.
-    """
+    """OMH time_interval covering one calendar day in ``tz``. Raises if
+    ``tz`` is None — a "day" in Tokyo is not a "day" in UTC."""
     if tz is None:
         raise ConversionError(
-            "this data type aggregates over a calendar day and requires an "
-            "explicit timezone — pass tz=... to convert() so the day boundaries "
-            "reflect the user's local calendar day, not UTC"
+            "this data type requires an explicit timezone — pass tz=... to "
+            "convert() so day boundaries reflect the user's local calendar day"
         )
     start = datetime.fromisoformat(date_str).replace(tzinfo=tz)
     end = start + timedelta(days=1)
@@ -66,7 +53,7 @@ def day_interval(date_str: str, *, tz: tzinfo | None) -> dict[str, Any]:
 
 
 def interval_from_bounds(start: str, end: str) -> dict[str, Any]:
-    """OMH ``time_interval`` from explicit start/end ISO-8601 strings."""
+    """OMH time_interval from explicit start/end ISO-8601 strings."""
     return {
         "start_date_time": isoformat(parse_datetime(start)),
         "end_date_time": isoformat(parse_datetime(end)),
@@ -74,7 +61,7 @@ def interval_from_bounds(start: str, end: str) -> dict[str, Any]:
 
 
 def date_time_frame(timestamp: Any) -> dict[str, Any]:
-    """OMH ``effective_time_frame`` with a single ``date_time``."""
+    """OMH effective_time_frame with a single date_time."""
     return {"date_time": isoformat(parse_datetime(timestamp))}
 
 
@@ -83,12 +70,7 @@ def unit_value(
     unit: str,
     cast: Callable[[Any], Any] = float,
 ) -> dict[str, Any]:
-    """OMH ``unit_value`` dict: ``{"value": cast(value), "unit": unit}``.
-
-    OMH represents every quantitative field as this two-key object. The
-    ``cast`` parameter lets callers pick the numeric type they want
-    (``int`` for whole counts, ``float`` for measurements).
-    """
+    """OMH unit_value: ``{"value": cast(value), "unit": unit}``."""
     return {"value": cast(value), "unit": unit}
 
 
@@ -102,14 +84,8 @@ def set_optional(
     cast: Callable[[Any], Any] = float,
     scale: float = 1,
 ) -> None:
-    """Set ``out[out_key]`` to a ``unit_value`` if ``sample[field]`` is
-    present and not ``None``; otherwise leave ``out`` unchanged.
-
-    ``scale`` is applied BEFORE ``cast`` so fractional inputs preserve
-    precision. Example: ``set_optional(cast=int, scale=60)`` on a
-    32.5-minute input yields ``int(32.5 * 60) = 1950`` seconds, not
-    ``int(32.5) * 60 = 1920``.
-    """
+    """Set ``out[out_key]`` to a unit_value if ``sample[field]`` is present
+    and not None. Scale is applied before cast (so 32.5 min * 60 -> 1950 sec)."""
     v = sample.get(field)
     if v is None:
         return

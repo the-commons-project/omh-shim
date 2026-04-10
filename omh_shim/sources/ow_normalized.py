@@ -1,9 +1,4 @@
-"""Converters for Open Wearables normalized read-API shapes -> Open mHealth schemas.
-
-Converter signature is uniformly
-``(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
-``tz`` is only consulted by daily (``date``-keyed) converters.
-"""
+"""Converters for Open Wearables normalized read-API shapes -> Open mHealth schemas."""
 
 from collections.abc import Mapping
 from datetime import timedelta, tzinfo
@@ -22,13 +17,7 @@ from omh_shim.errors import ConversionError
 
 
 def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """OW ``TimeSeriesSample`` (type=heart_rate) -> ``omh:heart-rate:2.0``.
-
-    Input::
-
-        {"timestamp": "2026-04-09T08:30:00+00:00", "type": "heart_rate",
-         "value": 72, "unit": "bpm", "source": {...}}
-    """
+    """Input: OW TimeSeriesSample with type=heart_rate."""
     return {
         "heart_rate": unit_value(sample["value"], "beats/min"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
@@ -38,7 +27,7 @@ def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
 def heart_rate_variability(
     sample: Mapping[str, Any], *, tz: tzinfo | None
 ) -> dict[str, Any]:
-    """OW ``TimeSeriesSample`` (type=heart_rate_variability) -> ``local:heart-rate-variability:1.0``."""
+    """Input: OW TimeSeriesSample with type=heart_rate_variability."""
     return {
         "heart_rate_variability": unit_value(sample["value"], "ms"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
@@ -46,16 +35,9 @@ def heart_rate_variability(
 
 
 def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """OW step-count input -> ``omh:step-count:3.0``.
-
-    Two supported input shapes:
-
-    1. ``ActivitySummary``: ``{"date": "2026-04-09", "steps": 8432, ...}``
-       — ``effective_time_frame`` covers the full day in ``tz``.
-    2. ``TimeSeriesSample`` with ``type=steps``: ``{"timestamp": ..., "value": 12, ...}``
-       — OMH rejects ``date_time`` for this schema, so the converter builds a
-       1-minute interval ending at ``timestamp`` (OW's per-minute resolution).
-    """
+    """Two shapes: ActivitySummary (``date`` + ``steps``) or TimeSeriesSample
+    (``timestamp`` + ``type=steps`` + ``value``). The latter builds a 1-minute
+    interval because OMH step-count requires time_interval, not date_time."""
     if "date" in sample:
         steps = sample["steps"]
         time_interval = day_interval(sample["date"], tz=tz)
@@ -67,8 +49,7 @@ def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
     else:
         raise ConversionError(
             "ow_normalized step_count input must have either {'date', 'steps'} "
-            "(ActivitySummary) or {'timestamp', 'type': 'steps', 'value'} "
-            "(TimeSeriesSample) keys"
+            "or {'timestamp', 'type': 'steps', 'value'}"
         )
     return {
         "step_count": unit_value(steps, "steps", cast=int),
@@ -77,10 +58,7 @@ def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
 
 
 def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """OW ``ActivitySummary`` (sleep fields) -> ``omh:sleep-duration:2.0``.
-
-    OMH requires a ``time_interval`` — uses the caller-provided ``tz`` for day bounds.
-    """
+    """Input: OW ActivitySummary with ``sleep_total_duration_minutes``."""
     return {
         "sleep_duration": unit_value(
             sample["sleep_total_duration_minutes"] * 60, "sec", cast=int
@@ -90,12 +68,7 @@ def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str,
 
 
 def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """OW sleep details -> ``omh:sleep-episode:1.1``.
-
-    Only ``effective_time_frame`` is schema-required. OMH sleep-episode:1.1
-    does not carry per-stage breakdowns; downstream consumers wanting stages
-    should look at sleep-stage-summary schemas (not in v0.1 scope).
-    """
+    """Input: OW sleep detail with bedtime_start/end and optional fields."""
     out: dict[str, Any] = {
         "effective_time_frame": {
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
@@ -121,11 +94,7 @@ def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, 
 def physical_activity(
     sample: Mapping[str, Any], *, tz: tzinfo | None
 ) -> dict[str, Any]:
-    """OW ``ActivitySummary`` -> ``omh:physical-activity:1.2``.
-
-    Only ``activity_name`` is schema-required. Step counts go through the
-    dedicated ``step_count`` converter; active minutes are not modeled here.
-    """
+    """Input: OW ActivitySummary with optional distance/calories."""
     out: dict[str, Any] = {
         "activity_name": "daily activity summary",
         "effective_time_frame": {"time_interval": day_interval(sample["date"], tz=tz)},

@@ -1,0 +1,8 @@
+{
+  "date": "2026-04-09",
+  "steps": 8432,
+  "distance_meters": 6240.5,
+  "active_calories_kcal": 342.5,
+  "active_minutes": 60,
+  "source": {"source_name": "Oura Ring", "device_model": "Oura Gen 3"}
+}

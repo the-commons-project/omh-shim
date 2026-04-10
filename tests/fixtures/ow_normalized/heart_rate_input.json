@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-09T08:30:00+00:00",
+  "zone_offset": "+00:00",
+  "type": "heart_rate",
+  "value": 72,
+  "unit": "bpm",
+  "source": {
+    "source_name": "Oura Ring",
+    "device_model": "Oura Gen 3"
+  }
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omh-shim"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Convert wearable health data from vendor schemas to Open mHealth schemas"
 readme = "README.md"
 requires-python = ">=3.11"

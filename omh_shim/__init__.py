@@ -11,7 +11,7 @@ from omh_shim._validate import validate_output
 from omh_shim.errors import ConversionError, ValidationError
 
 __all__ = ["convert", "ConversionError", "ValidationError"]
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 # Public data_type names map to OMH schema ids for output validation.
 _OMH_SCHEMA_ID: dict[str, str] = {

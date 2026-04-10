@@ -36,42 +36,41 @@ _SCHEMA_IDS_SOURCE: dict[str, str] = {
 #: import-time registry invariant.
 SCHEMA_IDS: Mapping[str, str] = MappingProxyType(_SCHEMA_IDS_SOURCE)
 
-# Import-time invariants:
-#
-# 1. Every registered converter has a schema id, and every declared schema
-#    id has at least one converter.
-# 2. Every schema id has an explicit filename entry in the loader.
-#
-# Uses explicit ``raise`` (not ``assert``) so the checks survive
-# ``python -O`` / PYTHONOPTIMIZE, which strips asserts.
-_registered_types = {data_type for (_, data_type) in _dispatch.REGISTRY}
-_missing_schema_ids = _registered_types - SCHEMA_IDS.keys()
-_missing_converters = SCHEMA_IDS.keys() - _registered_types
-if _missing_schema_ids or _missing_converters:
-    raise RuntimeError(
-        "REGISTRY and SCHEMA_IDS are out of sync: "
-        f"in REGISTRY but missing schema id: {sorted(_missing_schema_ids)}; "
-        f"in SCHEMA_IDS but missing converter: {sorted(_missing_converters)}"
-    )
+def _check_invariants() -> None:
+    """Two import-time invariants, checked once at package load:
 
-_loader_known = _schema_loader.known_ids()
-_schema_ids_without_files = set(SCHEMA_IDS.values()) - _loader_known
-_files_without_schema_ids = _loader_known - set(SCHEMA_IDS.values())
-if _schema_ids_without_files or _files_without_schema_ids:
-    raise RuntimeError(
-        "SCHEMA_IDS and _schema_loader filename table are out of sync: "
-        f"in SCHEMA_IDS but no filename: {sorted(_schema_ids_without_files)}; "
-        f"in loader but no schema id: {sorted(_files_without_schema_ids)}"
-    )
+    1. Every registered converter has a schema id, and every declared
+       schema id has at least one converter.
+    2. Every schema id has an explicit filename entry in the loader.
 
-del _registered_types, _missing_schema_ids, _missing_converters
-del _loader_known, _schema_ids_without_files, _files_without_schema_ids
+    Uses explicit ``raise`` (not ``assert``) so the checks survive
+    ``python -O`` / ``PYTHONOPTIMIZE``, which strips asserts.
+    """
+    registered = {data_type for (_, data_type) in _dispatch.REGISTRY}
+    if registered != SCHEMA_IDS.keys():
+        raise RuntimeError(
+            "REGISTRY and SCHEMA_IDS are out of sync: "
+            f"in REGISTRY only: {sorted(registered - SCHEMA_IDS.keys())}; "
+            f"in SCHEMA_IDS only: {sorted(SCHEMA_IDS.keys() - registered)}"
+        )
+
+    loader_known = _schema_loader.known_ids()
+    if set(SCHEMA_IDS.values()) != loader_known:
+        raise RuntimeError(
+            "SCHEMA_IDS and _schema_loader filename table are out of sync: "
+            f"in SCHEMA_IDS only: {sorted(set(SCHEMA_IDS.values()) - loader_known)}; "
+            f"in loader only: {sorted(loader_known - set(SCHEMA_IDS.values()))}"
+        )
+
+
+_check_invariants()
+del _check_invariants
 
 
 def convert(
     source: str,
     data_type: str,
-    sample: dict[str, Any],
+    sample: Mapping[str, Any],
     *,
     tz: tzinfo | None = None,
     validate: bool = True,

@@ -10,13 +10,20 @@ from omh_shim.sources import oura_raw, ow_normalized
 
 
 class _Converter(Protocol):
-    """Every converter takes a sample dict and a keyword-only timezone,
-    returning a dict-shaped record conforming to its target schema. Daily
-    converters require a non-None ``tz``; timestamp-based converters accept
-    ``None`` but must still receive the kwarg."""
+    """Every converter takes a read-only sample mapping and a keyword-only
+    timezone, returning a fresh dict-shaped record conforming to its target
+    schema. Daily converters require a non-None ``tz``; timestamp-based
+    converters accept ``None`` but must still receive the kwarg.
+
+    The uniform signature is deliberate. An alternative design with two
+    protocols (one daily, one timestamp) would force ``convert()`` to branch
+    on ``data_type`` at dispatch time — more code, more tests, no benefit
+    for the caller. Runtime rejection of ``tz=None`` for daily types (via
+    ``day_interval``) is the simpler correct behavior.
+    """
 
     def __call__(
-        self, sample: dict[str, Any], *, tz: tzinfo | None
+        self, sample: Mapping[str, Any], *, tz: tzinfo | None
     ) -> dict[str, Any]: ...
 
 

@@ -1,10 +1,11 @@
 """Converters for Open Wearables normalized read-API shapes -> Open mHealth schemas.
 
 Converter signature is uniformly
-``(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
+``(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
 ``tz`` is only consulted by daily (``date``-keyed) converters.
 """
 
+from collections.abc import Mapping
 from datetime import timedelta, tzinfo
 from typing import Any
 
@@ -14,13 +15,13 @@ from omh_shim._helpers import (
     interval_from_bounds,
     isoformat,
     parse_datetime,
-    set_opt,
-    uv,
+    set_optional,
+    unit_value,
 )
 from omh_shim.errors import ConversionError
 
 
-def heart_rate(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``TimeSeriesSample`` (type=heart_rate) -> ``omh:heart-rate:2.0``.
 
     Input::
@@ -29,20 +30,22 @@ def heart_rate(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
          "value": 72, "unit": "bpm", "source": {...}}
     """
     return {
-        "heart_rate": uv(sample["value"], "beats/min"),
+        "heart_rate": unit_value(sample["value"], "beats/min"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
     }
 
 
-def heart_rate_variability(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def heart_rate_variability(
+    sample: Mapping[str, Any], *, tz: tzinfo | None
+) -> dict[str, Any]:
     """OW ``TimeSeriesSample`` (type=heart_rate_variability) -> ``local:heart-rate-variability:1.0``."""
     return {
-        "heart_rate_variability": uv(sample["value"], "ms"),
+        "heart_rate_variability": unit_value(sample["value"], "ms"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
     }
 
 
-def step_count(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW step-count input -> ``omh:step-count:3.0``.
 
     Two supported input shapes:
@@ -68,23 +71,25 @@ def step_count(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
             "(TimeSeriesSample) keys"
         )
     return {
-        "step_count": uv(steps, "steps", cast=int),
+        "step_count": unit_value(steps, "steps", cast=int),
         "effective_time_frame": {"time_interval": time_interval},
     }
 
 
-def sleep_duration(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``ActivitySummary`` (sleep fields) -> ``omh:sleep-duration:2.0``.
 
     OMH requires a ``time_interval`` — uses the caller-provided ``tz`` for day bounds.
     """
     return {
-        "sleep_duration": uv(sample["sleep_total_duration_minutes"] * 60, "sec", cast=int),
+        "sleep_duration": unit_value(
+            sample["sleep_total_duration_minutes"] * 60, "sec", cast=int
+        ),
         "effective_time_frame": {"time_interval": day_interval(sample["date"], tz=tz)},
     }
 
 
-def sleep_episode(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW sleep details -> ``omh:sleep-episode:1.1``.
 
     Only ``effective_time_frame`` is schema-required. OMH sleep-episode:1.1
@@ -96,15 +101,26 @@ def sleep_episode(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
         }
     }
-    set_opt(out, "total_sleep_time", sample, "sleep_total_duration_minutes", unit="sec", cast=int, scale=60)
-    set_opt(out, "wake_after_sleep_onset", sample, "sleep_awake_minutes", unit="sec", cast=int, scale=60)
-    set_opt(out, "sleep_maintenance_efficiency_percentage", sample, "sleep_efficiency_score", unit="%")
+    set_optional(
+        out, "total_sleep_time", sample, "sleep_total_duration_minutes",
+        unit="sec", cast=int, scale=60,
+    )
+    set_optional(
+        out, "wake_after_sleep_onset", sample, "sleep_awake_minutes",
+        unit="sec", cast=int, scale=60,
+    )
+    set_optional(
+        out, "sleep_maintenance_efficiency_percentage", sample,
+        "sleep_efficiency_score", unit="%",
+    )
     if (is_nap := sample.get("is_nap")) is not None:
         out["is_main_sleep"] = not is_nap
     return out
 
 
-def physical_activity(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
+def physical_activity(
+    sample: Mapping[str, Any], *, tz: tzinfo | None
+) -> dict[str, Any]:
     """OW ``ActivitySummary`` -> ``omh:physical-activity:1.2``.
 
     Only ``activity_name`` is schema-required. Step counts go through the
@@ -114,6 +130,6 @@ def physical_activity(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str,
         "activity_name": "daily activity summary",
         "effective_time_frame": {"time_interval": day_interval(sample["date"], tz=tz)},
     }
-    set_opt(out, "distance", sample, "distance_meters", unit="m")
-    set_opt(out, "kcal_burned", sample, "active_calories_kcal", unit="kcal")
+    set_optional(out, "distance", sample, "distance_meters", unit="m")
+    set_optional(out, "kcal_burned", sample, "active_calories_kcal", unit="kcal")
     return out

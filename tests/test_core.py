@@ -231,3 +231,102 @@ def test_validate_false_skips(monkeypatch):
                              "type": "heart_rate", "value": 72},
                      validate=False)
     assert result["heart_rate"]["value"] == 72
+
+
+# --- header envelope (IEEE 1752.1 / OMH data-point) ---
+
+
+def test_header_false_returns_body_only():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72})
+    assert "header" not in result
+    assert "heart_rate" in result
+
+
+def test_header_true_returns_envelope():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    assert "header" in result
+    assert "body" in result
+    assert result["body"]["heart_rate"]["value"] == 72.0
+
+
+def test_header_has_correct_schema_id_components():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    sid = result["header"]["schema_id"]
+    assert sid == {"namespace": "omh", "name": "heart-rate", "version": "2.0"}
+
+
+def test_header_has_uuid():
+    import uuid as uuid_mod
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    uuid_mod.UUID(result["header"]["uuid"])  # raises ValueError if invalid
+
+
+def test_header_has_sensed_modality():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    assert result["header"]["modality"] == "sensed"
+
+
+def test_header_has_source_creation_date_time():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    assert "source_creation_date_time" in result["header"]
+
+
+def test_header_has_no_acquisition_provenance():
+    """acquisition_provenance is from the older OMH data-point schema, not
+    IEEE 1752.1. The header must NOT include it."""
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    assert "acquisition_provenance" not in result["header"]
+
+
+def test_header_external_datasheets():
+    """Matches the JHE data-point examples which include manufacturer info."""
+    result = convert(
+        source="oura_raw", data_type="heart_rate",
+        sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
+        header=True,
+        external_datasheets=[
+            {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
+        ],
+    )
+    assert result["header"]["external_datasheets"] == [
+        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
+    ]
+
+
+def test_header_omits_external_datasheets_when_none():
+    result = convert(source="ow_normalized", data_type="heart_rate",
+                     sample={"timestamp": "2026-04-09T08:00:00Z",
+                             "type": "heart_rate", "value": 72},
+                     header=True)
+    assert "external_datasheets" not in result["header"]
+
+
+def test_header_local_schema_namespace():
+    """HRV uses the local: namespace — header.schema_id must reflect that."""
+    result = convert(
+        source="oura_raw", data_type="heart_rate_variability",
+        sample={"rmssd": 42.5, "timestamp": "2026-04-09T08:00:00Z"},
+        header=True,
+    )
+    sid = result["header"]["schema_id"]
+    assert sid == {"namespace": "local", "name": "heart-rate-variability", "version": "1.0"}

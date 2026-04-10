@@ -57,6 +57,36 @@ convert(
 )
 ```
 
+Pass `header=True` to get the full IEEE 1752.1 data-point envelope with
+UUID, schema_id components, creation timestamp, modality, and optional
+`external_datasheets`:
+
+```python
+convert(
+    source="oura_raw",
+    data_type="heart_rate",
+    sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
+    header=True,
+    external_datasheets=[
+        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
+    ],
+)
+# Returns:
+# {
+#   "header": {
+#     "uuid": "...",
+#     "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
+#     "source_creation_date_time": "...",
+#     "modality": "sensed",
+#     "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "Oura"}]
+#   },
+#   "body": {
+#     "heart_rate": {"value": 72.0, "unit": "beats/min"},
+#     "effective_time_frame": {"date_time": "2026-04-09T08:00:00Z"}
+#   }
+# }
+```
+
 `convert` raises `ConversionError` for unknown `(source, data_type)` pairs,
 invalid sample shapes, naive (timezone-less) datetimes, or a missing ``tz``
 for daily data types. It raises `ValidationError` if the converter output

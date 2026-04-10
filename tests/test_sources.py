@@ -35,7 +35,10 @@ def test_converter_matches_expected(source, data_type):
     fixture_dir = FIXTURES / source
     sample = json.loads((fixture_dir / f"{data_type}_input.json").read_text())
     expected = json.loads((fixture_dir / f"{data_type}_expected.json").read_text())
-    assert convert(source=source, data_type=data_type, sample=sample, tz=UTC) == expected
+    result = convert(source=source, data_type=data_type, sample=sample, tz=UTC)
+    assert "header" in result, "convert() must always return {header, body}"
+    assert "body" in result
+    assert result["body"] == expected
 
 
 # --- source-specific edge cases ---
@@ -57,7 +60,7 @@ def test_oura_sleep_episode_nap_is_not_main_sleep():
         "type": "nap",
     }
     result = convert(source="oura_raw", data_type="sleep_episode", sample=sample)
-    assert result["is_main_sleep"] is False
+    assert result["body"]["is_main_sleep"] is False
 
 
 def test_oura_physical_activity_omits_optional_fields_when_absent():
@@ -80,8 +83,9 @@ def test_ow_step_count_accepts_timeseries_shape():
         "unit": "steps",
     }
     result = convert(source="ow_normalized", data_type="step_count", sample=sample)
-    assert result["step_count"] == {"value": 12, "unit": "steps"}
-    interval = result["effective_time_frame"]["time_interval"]
+    body = result["body"]
+    assert body["step_count"] == {"value": 12, "unit": "steps"}
+    interval = body["effective_time_frame"]["time_interval"]
     assert interval["start_date_time"] == "2026-04-09T08:29:00Z"
     assert interval["end_date_time"] == "2026-04-09T08:30:00Z"
 
@@ -103,6 +107,7 @@ def test_ow_physical_activity_omits_optional_fields_when_absent():
         sample={"date": "2026-04-09", "steps": 100},
         tz=UTC,
     )
-    assert "distance" not in result
-    assert "kcal_burned" not in result
-    assert result["activity_name"] == "daily activity summary"
+    body = result["body"]
+    assert "distance" not in body
+    assert "kcal_burned" not in body
+    assert body["activity_name"] == "daily activity summary"

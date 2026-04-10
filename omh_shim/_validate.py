@@ -18,6 +18,12 @@ from omh_shim._schema_loader import load as load_schema
 from omh_shim.errors import ValidationError
 
 
+@lru_cache(maxsize=32)
+def _validator(schema_id: str) -> Draft7Validator:
+    """Cached Draft7Validator per schema id. Built once, reused across calls."""
+    return Draft7Validator(load_schema(schema_id), registry=_registry())
+
+
 @lru_cache(maxsize=1)
 def _registry() -> Registry:
     """Build a referencing.Registry that serves every vendored schema by filename."""
@@ -39,9 +45,10 @@ def validate_output(output: dict, schema_id: str) -> None:
     Raises ``ValidationError`` with a human-readable message listing all
     violations. Returns ``None`` on success.
     """
-    schema = load_schema(schema_id)
-    validator = Draft7Validator(schema, registry=_registry())
-    errors = sorted(validator.iter_errors(output), key=lambda e: list(e.absolute_path))
+    errors = sorted(
+        _validator(schema_id).iter_errors(output),
+        key=lambda e: list(e.absolute_path),
+    )
     if not errors:
         return
     pieces = []

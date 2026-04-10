@@ -1,25 +1,44 @@
 """Shared helpers for source converters.
 
 Small building blocks used by every converter: datetime parsing/formatting,
-OMH time-interval construction, and the ``{"value": x, "unit": "..."}`` dict
+time-interval construction, and the ``{"value": x, "unit": "..."}`` dict
 shape that OMH uses for every quantitative field.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 from typing import Any
+
+from omh_shim.errors import ConversionError
 
 
 def parse_datetime(value: Any) -> datetime:
-    """Parse an ISO-8601 datetime string. Naive results are coerced to UTC."""
+    """Parse an ISO-8601 datetime string into a timezone-aware datetime.
+
+    Raises ``ConversionError`` for naive datetimes (no tzinfo). Silent UTC
+    coercion is a data-quality footgun — a Tokyo user's "22:30" without an
+    offset must not be recorded as UTC. Callers must provide explicit
+    timezone offsets in their input data.
+    """
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=UTC)
-    if not isinstance(value, str):
-        raise ValueError(f"expected ISO-8601 datetime string, got {type(value).__name__}")
-    s = value.strip()
-    if s.endswith("Z"):
-        s = s[:-1] + "+00:00"
-    dt = datetime.fromisoformat(s)
-    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+        dt = value
+    elif isinstance(value, str):
+        s = value.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError as e:
+            raise ConversionError(f"invalid ISO-8601 datetime: {value!r}") from e
+    else:
+        raise ConversionError(
+            f"expected ISO-8601 datetime string, got {type(value).__name__}"
+        )
+    if dt.tzinfo is None:
+        raise ConversionError(
+            f"datetime {value!r} has no timezone; omh-shim requires explicit "
+            "timezone offsets to avoid silently misaligning clinical data"
+        )
+    return dt
 
 
 def isoformat(dt: datetime) -> str:
@@ -27,9 +46,20 @@ def isoformat(dt: datetime) -> str:
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def day_interval(date_str: str) -> dict:
-    """OMH ``time_interval`` covering one calendar day in UTC."""
-    start = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
+def day_interval(date_str: str, tz: tzinfo | None) -> dict:
+    """OMH ``time_interval`` covering one calendar day in the given timezone.
+
+    ``tz`` is REQUIRED (pass ``datetime.UTC`` explicitly when you mean UTC).
+    A "day" in Tokyo is not a "day" in UTC; silently defaulting to UTC
+    would misalign daily summaries by up to 24 hours for any non-UTC user.
+    """
+    if tz is None:
+        raise ConversionError(
+            "daily data_types (step_count, physical_activity, sleep_duration) "
+            "require a timezone — pass tz=... to convert() so the day boundaries "
+            "reflect the user's local calendar day, not UTC"
+        )
+    start = datetime.fromisoformat(date_str).replace(tzinfo=tz)
     end = start + timedelta(days=1)
     return {"start_date_time": isoformat(start), "end_date_time": isoformat(end)}
 
@@ -60,7 +90,7 @@ def set_opt(
     *,
     unit: str,
     cast=float,
-    scale: int | float = 1,
+    scale: float = 1,
 ) -> None:
     """Set ``out[out_key]`` to a unit_value if ``sample[field]`` is not None/missing.
 

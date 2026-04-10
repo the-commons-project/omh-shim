@@ -1,13 +1,21 @@
 """(source, data_type) -> converter function lookup."""
 
-from collections.abc import Callable
+from collections.abc import Mapping
+from datetime import tzinfo
+from types import MappingProxyType
+from typing import Any, Protocol
 
 from omh_shim.errors import ConversionError
 from omh_shim.sources import oura_raw, ow_normalized
 
-_Converter = Callable[[dict], dict]
 
-REGISTRY: dict[tuple[str, str], _Converter] = {
+class _Converter(Protocol):
+    def __call__(
+        self, sample: Mapping[str, Any], *, tz: tzinfo | None
+    ) -> dict[str, Any]: ...
+
+
+REGISTRY: Mapping[tuple[str, str], _Converter] = MappingProxyType({
     ("oura_raw", "heart_rate"):              oura_raw.heart_rate,
     ("oura_raw", "heart_rate_variability"):  oura_raw.heart_rate_variability,
     ("oura_raw", "step_count"):              oura_raw.step_count,
@@ -20,7 +28,7 @@ REGISTRY: dict[tuple[str, str], _Converter] = {
     ("ow_normalized", "sleep_duration"):         ow_normalized.sleep_duration,
     ("ow_normalized", "sleep_episode"):          ow_normalized.sleep_episode,
     ("ow_normalized", "physical_activity"):      ow_normalized.physical_activity,
-}
+})
 
 
 def lookup(source: str, data_type: str) -> _Converter:

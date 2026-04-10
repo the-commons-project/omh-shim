@@ -1,31 +1,35 @@
 """Load vendored OMH JSON schemas by schema id.
 
-Schema ids look like ``omh:heart-rate:2.0``. The on-disk filename is derived
-from the id by replacing ``:`` with ``_`` and ``.`` with ``-``, then appending
-``.json`` (e.g. ``omh:heart-rate:2.0`` -> ``omh_heart-rate_2-0.json``).
+Uses an explicit lookup table instead of string substitution to avoid
+filename collisions (``omh:a.b:1.0`` and ``omh:a-b:1.0`` would collide
+under ``:``->``_``, ``.``->``-`` encoding).
 """
 
 import importlib.resources
 import json
 from functools import cache
+from typing import Any
+
+_FILENAMES: dict[str, str] = {
+    "omh:heart-rate:2.0": "omh_heart-rate_2-0.json",
+    "local:heart-rate-variability:1.0": "local_heart-rate-variability_1-0.json",
+    "omh:step-count:3.0": "omh_step-count_3-0.json",
+    "omh:sleep-duration:2.0": "omh_sleep-duration_2-0.json",
+    "omh:sleep-episode:1.1": "omh_sleep-episode_1-1.json",
+    "omh:physical-activity:1.2": "omh_physical-activity_1-2.json",
+}
 
 
-def _id_to_filename(schema_id: str) -> str:
-    return schema_id.replace(":", "_").replace(".", "-") + ".json"
+def known_ids() -> frozenset[str]:
+    """Schema ids this loader has filename entries for."""
+    return frozenset(_FILENAMES)
 
 
 @cache
-def load(schema_id: str) -> dict:
-    """Load the vendored JSON schema with the given OMH id.
-
-    Raises
-    ------
-    FileNotFoundError
-        If no vendored file matches the id.
-    """
-    filename = _id_to_filename(schema_id)
+def load(schema_id: str) -> dict[str, Any]:
+    """Load a vendored JSON schema by id. Raises KeyError if unknown."""
+    filename = _FILENAMES[schema_id]
     resource = importlib.resources.files("omh_shim.schemas").joinpath(filename)
-    if not resource.is_file():
-        raise FileNotFoundError(f"No vendored schema for id={schema_id!r} (expected {filename})")
     with resource.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        loaded: dict[str, Any] = json.load(f)
+    return loaded

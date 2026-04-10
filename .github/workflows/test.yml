@@ -28,5 +28,8 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Type-check
+        run: mypy
+
       - name: Test
         run: pytest --cov=omh_shim --cov-report=term-missing

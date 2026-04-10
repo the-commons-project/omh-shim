@@ -1,0 +1,93 @@
+"""Parameterized tests for all source converters.
+
+One fixture pair per (source, data_type) under ``tests/fixtures/<source>/``.
+``convert()`` validates each output against its target OMH schema by default,
+so a green test is also a passing schema validation.
+"""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from omh_shim import convert
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+DATA_TYPES = [
+    "heart_rate",
+    "heart_rate_variability",
+    "step_count",
+    "sleep_duration",
+    "sleep_episode",
+    "physical_activity",
+]
+SOURCES = ["oura_raw", "ow_normalized"]
+
+
+@pytest.mark.parametrize("source", SOURCES)
+@pytest.mark.parametrize("data_type", DATA_TYPES)
+def test_converter_matches_expected(source, data_type):
+    fixture_dir = FIXTURES / source
+    sample = json.loads((fixture_dir / f"{data_type}_input.json").read_text())
+    expected = json.loads((fixture_dir / f"{data_type}_expected.json").read_text())
+    assert convert(source=source, data_type=data_type, sample=sample) == expected
+
+
+# --- source-specific edge cases ---
+
+
+def test_oura_hrv_rejects_normalized_score():
+    """Oura's daily_readiness contributors.hrv_balance is a 0-100 score, not ms."""
+    sample = {"day": "2026-04-09", "score": 85, "contributors": {"hrv_balance": 70}}
+    with pytest.raises(KeyError, match="rmssd"):
+        convert(source="oura_raw", data_type="heart_rate_variability", sample=sample)
+
+
+def test_oura_sleep_episode_nap_is_not_main_sleep():
+    sample = {
+        "id": "nap-1",
+        "bedtime_start": "2026-04-09T13:00:00+00:00",
+        "bedtime_end": "2026-04-09T13:45:00+00:00",
+        "total_sleep_duration": 2400,
+        "type": "nap",
+    }
+    result = convert(source="oura_raw", data_type="sleep_episode", sample=sample)
+    assert result["is_main_sleep"] is False
+
+
+def test_oura_physical_activity_omits_optional_fields_when_absent():
+    result = convert(source="oura_raw", data_type="physical_activity", sample={"day": "2026-04-09"})
+    assert "distance" not in result
+    assert "kcal_burned" not in result
+
+
+def test_ow_step_count_accepts_timeseries_shape():
+    """TimeSeriesSample with type=steps — 1-minute interval ending at timestamp."""
+    sample = {
+        "timestamp": "2026-04-09T08:30:00+00:00",
+        "type": "steps",
+        "value": 12,
+        "unit": "steps",
+    }
+    result = convert(source="ow_normalized", data_type="step_count", sample=sample)
+    assert result["step_count"] == {"value": 12, "unit": "steps"}
+    interval = result["effective_time_frame"]["time_interval"]
+    assert interval["start_date_time"] == "2026-04-09T08:29:00Z"
+    assert interval["end_date_time"] == "2026-04-09T08:30:00Z"
+
+
+def test_ow_step_count_rejects_unknown_shape():
+    with pytest.raises(KeyError):
+        convert(source="ow_normalized", data_type="step_count", sample={"foo": "bar"})
+
+
+def test_ow_physical_activity_omits_optional_fields_when_absent():
+    result = convert(
+        source="ow_normalized",
+        data_type="physical_activity",
+        sample={"date": "2026-04-09", "steps": 100},
+    )
+    assert "distance" not in result
+    assert "kcal_burned" not in result
+    assert result["activity_name"] == "daily activity summary"

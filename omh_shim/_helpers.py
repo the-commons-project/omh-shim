@@ -5,7 +5,7 @@ time-interval construction, and the ``{"value": x, "unit": "..."}`` dict
 shape that OMH uses for every quantitative field.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, tzinfo
 from typing import Any
 
@@ -78,30 +78,36 @@ def date_time_frame(timestamp: Any) -> dict[str, Any]:
     return {"date_time": isoformat(parse_datetime(timestamp))}
 
 
-def uv(
+def unit_value(
     value: Any,
     unit: str,
     cast: Callable[[Any], Any] = float,
 ) -> dict[str, Any]:
-    """OMH unit_value dict: ``{"value": cast(value), "unit": unit}``."""
+    """OMH ``unit_value`` dict: ``{"value": cast(value), "unit": unit}``.
+
+    OMH represents every quantitative field as this two-key object. The
+    ``cast`` parameter lets callers pick the numeric type they want
+    (``int`` for whole counts, ``float`` for measurements).
+    """
     return {"value": cast(value), "unit": unit}
 
 
-def set_opt(
+def set_optional(
     out: dict[str, Any],
     out_key: str,
-    sample: dict[str, Any],
+    sample: Mapping[str, Any],
     field: str,
     *,
     unit: str,
     cast: Callable[[Any], Any] = float,
     scale: float = 1,
 ) -> None:
-    """Set ``out[out_key]`` to a unit_value if ``sample[field]`` is not None/missing.
+    """Set ``out[out_key]`` to a ``unit_value`` if ``sample[field]`` is
+    present and not ``None``; otherwise leave ``out`` unchanged.
 
     ``scale`` is applied BEFORE ``cast`` so fractional inputs preserve
-    precision. Example: ``set_opt(cast=int, scale=60)`` on a 32.5-minute
-    input yields ``int(32.5 * 60) = 1950`` seconds, not
+    precision. Example: ``set_optional(cast=int, scale=60)`` on a
+    32.5-minute input yields ``int(32.5 * 60) = 1950`` seconds, not
     ``int(32.5) * 60 = 1920``.
     """
     v = sample.get(field)

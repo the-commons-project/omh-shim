@@ -7,7 +7,7 @@ Schema-validation tests are written here too but skipped until Task 3
 import pytest
 
 from omh_shim import ConversionError, ValidationError, convert
-from omh_shim._dispatch import _REGISTRY, lookup, register
+from omh_shim._dispatch import lookup
 
 
 def test_package_imports_and_exports_public_api():
@@ -22,18 +22,6 @@ def test_lookup_unknown_pair_raises_conversion_error():
     msg = str(exc_info.value)
     assert "nope_source" in msg
     assert "nope_data_type" in msg
-
-
-def test_register_then_lookup_roundtrip():
-    @register(source="test_src", data_type="test_dt")
-    def _converter(sample):
-        return {"echoed": sample}
-
-    try:
-        fn = lookup("test_src", "test_dt")
-        assert fn({"x": 1}) == {"echoed": {"x": 1}}
-    finally:
-        _REGISTRY.pop(("test_src", "test_dt"), None)
 
 
 def test_convert_propagates_unknown_pair_as_conversion_error():

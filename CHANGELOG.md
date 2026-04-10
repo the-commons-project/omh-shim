@@ -5,6 +5,49 @@ All notable changes to omh-shim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — BREAKING
+
+- `convert()` now takes a keyword-only ``tz`` parameter. Daily data types
+  (`step_count`, `physical_activity`, `sleep_duration`) REQUIRE an explicit
+  timezone so day boundaries reflect the user's local calendar day rather
+  than silently assuming UTC. A Tokyo user's "April 9" is not UTC "April 9"
+  — the previous behavior misaligned daily summaries by up to 24 hours for
+  any non-UTC user.
+- Naive (timezone-less) datetimes are now rejected with `ConversionError`
+  at parse time. Silent coercion to UTC previously misrecorded a Tokyo
+  user's "22:30" local time as "22:30 UTC".
+- `heart_rate_variability` schema id renamed from
+  `omh:heart-rate-variability:1.0` to `local:heart-rate-variability:1.0`.
+  Open mHealth has not published a canonical HRV schema; the `local:`
+  namespace prevents downstream consumers from assuming OMH-standard
+  interoperability. Callers pinning the old id must update.
+- `convert()` now wraps any `KeyError`/`ValueError`/`TypeError` from
+  converters as `ConversionError` so the public contract ("invalid sample
+  shape raises ConversionError") actually holds. Previously converters
+  leaked raw `KeyError` in several paths.
+
+### Added
+
+- Positive and negative regression tests for all timezone behavior,
+  parametrized across every (source, data_type) pair that parses datetimes
+  or aggregates days.
+- Import-time invariant check: `REGISTRY` and `_SCHEMA_ID` must stay in
+  sync, so adding a converter without its schema id fails fast at import.
+
+### Fixed
+
+- `_validate.Draft7Validator` is now cached per schema id via `lru_cache`
+  instead of rebuilt on every `convert()` call — real speedup for bulk
+  ingest workloads.
+
+### Refactored (non-behavioral)
+
+- Converters raise `ConversionError` directly rather than relying on the
+  `convert()` wrapper to translate raw `KeyError`. The exception type is
+  part of the contract, not an implementation detail of the wrapper.
+
 ## [0.1.0] — 2026-04-09
 
 ### Added

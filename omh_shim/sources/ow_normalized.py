@@ -1,6 +1,6 @@
 """Converters for Open Wearables normalized read-API shapes -> Open mHealth schemas.
 
-Converter signature is uniformly ``(sample: dict, tz: tzinfo | None) -> dict``.
+Converter signature is uniformly ``(sample: dict, *, tz: tzinfo | None) -> dict``.
 ``tz`` is only consulted by daily (``date``-keyed) converters.
 """
 
@@ -18,7 +18,7 @@ from omh_shim._helpers import (
 from omh_shim.errors import ConversionError
 
 
-def heart_rate(sample: dict, tz: tzinfo | None) -> dict:
+def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW ``TimeSeriesSample`` (type=heart_rate) -> ``omh:heart-rate:2.0``.
 
     Input::
@@ -32,7 +32,7 @@ def heart_rate(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def heart_rate_variability(sample: dict, tz: tzinfo | None) -> dict:
+def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW ``TimeSeriesSample`` (type=heart_rate_variability) -> ``local:heart-rate-variability:1.0``."""
     return {
         "heart_rate_variability": uv(sample["value"], "ms"),
@@ -40,7 +40,7 @@ def heart_rate_variability(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def step_count(sample: dict, tz: tzinfo | None) -> dict:
+def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW step-count input -> ``omh:step-count:3.0``.
 
     Two supported input shapes:
@@ -71,7 +71,7 @@ def step_count(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_duration(sample: dict, tz: tzinfo | None) -> dict:
+def sleep_duration(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW ``ActivitySummary`` (sleep fields) -> ``omh:sleep-duration:2.0``.
 
     OMH requires a ``time_interval`` — uses the caller-provided ``tz`` for day bounds.
@@ -82,7 +82,7 @@ def sleep_duration(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_episode(sample: dict, tz: tzinfo | None) -> dict:
+def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW sleep details -> ``omh:sleep-episode:1.1``.
 
     Only ``effective_time_frame`` is schema-required. OMH sleep-episode:1.1
@@ -102,7 +102,7 @@ def sleep_episode(sample: dict, tz: tzinfo | None) -> dict:
     return out
 
 
-def physical_activity(sample: dict, tz: tzinfo | None) -> dict:
+def physical_activity(sample: dict, *, tz: tzinfo | None) -> dict:
     """OW ``ActivitySummary`` -> ``omh:physical-activity:1.2``.
 
     Only ``activity_name`` is schema-required. Step counts go through the

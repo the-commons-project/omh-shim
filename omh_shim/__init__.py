@@ -4,6 +4,7 @@ Public API:
     convert(source, data_type, sample, *, tz=None, validate=True) -> dict
     ConversionError
     ValidationError
+    SCHEMA_IDS  (mapping of data_type -> schema id)
 """
 
 from datetime import tzinfo
@@ -12,14 +13,14 @@ from omh_shim._dispatch import REGISTRY, lookup
 from omh_shim._validate import validate_output
 from omh_shim.errors import ConversionError, ValidationError
 
-__all__ = ["convert", "ConversionError", "ValidationError"]
+__all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
 __version__ = "0.1.0"
 
 # data_type -> schema id for output validation.
 # Note: heart_rate_variability uses a local placeholder schema because Open
 # mHealth has not published a canonical HRV schema. It lives under the
 # ``local:`` namespace to avoid implying OMH-standard interoperability.
-_SCHEMA_ID: dict[str, str] = {
+SCHEMA_IDS: dict[str, str] = {
     "heart_rate": "omh:heart-rate:2.0",
     "heart_rate_variability": "local:heart-rate-variability:1.0",
     "step_count": "omh:step-count:3.0",
@@ -30,11 +31,18 @@ _SCHEMA_ID: dict[str, str] = {
 
 # Import-time invariant: every registered converter must have a schema id,
 # and every declared schema id must have at least one converter. Catches
-# drift between REGISTRY and _SCHEMA_ID the moment the package imports.
-assert {data_type for (_, data_type) in REGISTRY} == _SCHEMA_ID.keys(), (
-    "REGISTRY and _SCHEMA_ID are out of sync — every (source, data_type) in "
-    "REGISTRY must have a matching entry in _SCHEMA_ID and vice versa"
-)
+# drift between REGISTRY and SCHEMA_IDS at import. Uses an explicit raise
+# (not ``assert``) so the check survives ``python -O`` / PYTHONOPTIMIZE.
+_registered_types = {data_type for (_, data_type) in REGISTRY}
+_missing_schema_ids = _registered_types - SCHEMA_IDS.keys()
+_missing_converters = SCHEMA_IDS.keys() - _registered_types
+if _missing_schema_ids or _missing_converters:
+    raise RuntimeError(
+        "REGISTRY and SCHEMA_IDS are out of sync: "
+        f"in REGISTRY but missing schema id: {sorted(_missing_schema_ids)}; "
+        f"in SCHEMA_IDS but missing converter: {sorted(_missing_converters)}"
+    )
+del _registered_types, _missing_schema_ids, _missing_converters
 
 
 def convert(
@@ -81,11 +89,12 @@ def convert(
     """
     converter = lookup(source, data_type)
     try:
-        output = converter(sample, tz)
+        output = converter(sample, tz=tz)
     except (KeyError, ValueError, TypeError) as e:
         raise ConversionError(
-            f"{source}/{data_type} could not convert sample: {e}"
+            f"{source}/{data_type} could not convert sample: "
+            f"{type(e).__name__}: {e}"
         ) from e
     if validate:
-        validate_output(output, _SCHEMA_ID[data_type])
+        validate_output(output, SCHEMA_IDS[data_type])
     return output

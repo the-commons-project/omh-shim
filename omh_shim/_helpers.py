@@ -5,6 +5,7 @@ time-interval construction, and the ``{"value": x, "unit": "..."}`` dict
 shape that OMH uses for every quantitative field.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, tzinfo
 from typing import Any
 
@@ -46,7 +47,7 @@ def isoformat(dt: datetime) -> str:
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def day_interval(date_str: str, tz: tzinfo | None) -> dict:
+def day_interval(date_str: str, *, tz: tzinfo | None) -> dict[str, Any]:
     """OMH ``time_interval`` covering one calendar day in the given timezone.
 
     ``tz`` is REQUIRED (pass ``datetime.UTC`` explicitly when you mean UTC).
@@ -64,7 +65,7 @@ def day_interval(date_str: str, tz: tzinfo | None) -> dict:
     return {"start_date_time": isoformat(start), "end_date_time": isoformat(end)}
 
 
-def interval_from_bounds(start: str, end: str) -> dict:
+def interval_from_bounds(start: str, end: str) -> dict[str, Any]:
     """OMH ``time_interval`` from explicit start/end ISO-8601 strings."""
     return {
         "start_date_time": isoformat(parse_datetime(start)),
@@ -72,31 +73,38 @@ def interval_from_bounds(start: str, end: str) -> dict:
     }
 
 
-def date_time_frame(timestamp: Any) -> dict:
+def date_time_frame(timestamp: Any) -> dict[str, Any]:
     """OMH ``effective_time_frame`` with a single ``date_time``."""
     return {"date_time": isoformat(parse_datetime(timestamp))}
 
 
-def uv(value: Any, unit: str, cast=float) -> dict:
+def uv(
+    value: Any,
+    unit: str,
+    cast: Callable[[Any], Any] = float,
+) -> dict[str, Any]:
     """OMH unit_value dict: ``{"value": cast(value), "unit": unit}``."""
     return {"value": cast(value), "unit": unit}
 
 
 def set_opt(
-    out: dict,
+    out: dict[str, Any],
     out_key: str,
-    sample: dict,
+    sample: dict[str, Any],
     field: str,
     *,
     unit: str,
-    cast=float,
+    cast: Callable[[Any], Any] = float,
     scale: float = 1,
 ) -> None:
     """Set ``out[out_key]`` to a unit_value if ``sample[field]`` is not None/missing.
 
-    ``scale`` is applied after ``cast`` (e.g. minutes -> seconds uses scale=60).
+    ``scale`` is applied BEFORE ``cast`` so fractional inputs preserve
+    precision. Example: ``set_opt(cast=int, scale=60)`` on a 32.5-minute
+    input yields ``int(32.5 * 60) = 1950`` seconds, not
+    ``int(32.5) * 60 = 1920``.
     """
     v = sample.get(field)
     if v is None:
         return
-    out[out_key] = {"value": cast(v) * scale, "unit": unit}
+    out[out_key] = {"value": cast(v * scale), "unit": unit}

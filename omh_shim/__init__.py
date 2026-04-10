@@ -4,13 +4,15 @@ Public API:
     convert(source, data_type, sample, *, tz=None, validate=True) -> dict
     ConversionError
     ValidationError
-    SCHEMA_IDS  (mapping of data_type -> schema id)
+    SCHEMA_IDS  (read-only mapping of data_type -> schema id)
 """
 
+from collections.abc import Mapping
 from datetime import tzinfo
+from types import MappingProxyType
+from typing import Any
 
-from omh_shim._dispatch import REGISTRY, lookup
-from omh_shim._validate import validate_output
+from omh_shim import _dispatch, _schema_loader, _validate
 from omh_shim.errors import ConversionError, ValidationError
 
 __all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
@@ -20,7 +22,7 @@ __version__ = "0.1.0"
 # Note: heart_rate_variability uses a local placeholder schema because Open
 # mHealth has not published a canonical HRV schema. It lives under the
 # ``local:`` namespace to avoid implying OMH-standard interoperability.
-SCHEMA_IDS: dict[str, str] = {
+_SCHEMA_IDS_SOURCE: dict[str, str] = {
     "heart_rate": "omh:heart-rate:2.0",
     "heart_rate_variability": "local:heart-rate-variability:1.0",
     "step_count": "omh:step-count:3.0",
@@ -29,11 +31,20 @@ SCHEMA_IDS: dict[str, str] = {
     "physical_activity": "omh:physical-activity:1.2",
 }
 
-# Import-time invariant: every registered converter must have a schema id,
-# and every declared schema id must have at least one converter. Catches
-# drift between REGISTRY and SCHEMA_IDS at import. Uses an explicit raise
-# (not ``assert``) so the check survives ``python -O`` / PYTHONOPTIMIZE.
-_registered_types = {data_type for (_, data_type) in REGISTRY}
+#: Public read-only mapping of ``data_type`` -> schema id. Wrapped in
+#: ``MappingProxyType`` so consumers cannot mutate it and corrupt the
+#: import-time registry invariant.
+SCHEMA_IDS: Mapping[str, str] = MappingProxyType(_SCHEMA_IDS_SOURCE)
+
+# Import-time invariants:
+#
+# 1. Every registered converter has a schema id, and every declared schema
+#    id has at least one converter.
+# 2. Every schema id has an explicit filename entry in the loader.
+#
+# Uses explicit ``raise`` (not ``assert``) so the checks survive
+# ``python -O`` / PYTHONOPTIMIZE, which strips asserts.
+_registered_types = {data_type for (_, data_type) in _dispatch.REGISTRY}
 _missing_schema_ids = _registered_types - SCHEMA_IDS.keys()
 _missing_converters = SCHEMA_IDS.keys() - _registered_types
 if _missing_schema_ids or _missing_converters:
@@ -42,17 +53,29 @@ if _missing_schema_ids or _missing_converters:
         f"in REGISTRY but missing schema id: {sorted(_missing_schema_ids)}; "
         f"in SCHEMA_IDS but missing converter: {sorted(_missing_converters)}"
     )
+
+_loader_known = _schema_loader.known_ids()
+_schema_ids_without_files = set(SCHEMA_IDS.values()) - _loader_known
+_files_without_schema_ids = _loader_known - set(SCHEMA_IDS.values())
+if _schema_ids_without_files or _files_without_schema_ids:
+    raise RuntimeError(
+        "SCHEMA_IDS and _schema_loader filename table are out of sync: "
+        f"in SCHEMA_IDS but no filename: {sorted(_schema_ids_without_files)}; "
+        f"in loader but no schema id: {sorted(_files_without_schema_ids)}"
+    )
+
 del _registered_types, _missing_schema_ids, _missing_converters
+del _loader_known, _schema_ids_without_files, _files_without_schema_ids
 
 
 def convert(
     source: str,
     data_type: str,
-    sample: dict,
+    sample: dict[str, Any],
     *,
     tz: tzinfo | None = None,
     validate: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Convert one source sample to one Open mHealth record.
 
     Parameters
@@ -87,7 +110,7 @@ def convert(
     ValidationError
         Output failed schema validation (only when ``validate=True``).
     """
-    converter = lookup(source, data_type)
+    converter = _dispatch.lookup(source, data_type)
     try:
         output = converter(sample, tz=tz)
     except (KeyError, ValueError, TypeError) as e:
@@ -96,5 +119,8 @@ def convert(
             f"{type(e).__name__}: {e}"
         ) from e
     if validate:
-        validate_output(output, SCHEMA_IDS[data_type])
+        # Called via the module attribute (not a re-exported local binding)
+        # so tests can monkeypatch ``omh_shim._validate.validate_output`` at
+        # a single stable location.
+        _validate.validate_output(output, SCHEMA_IDS[data_type])
     return output

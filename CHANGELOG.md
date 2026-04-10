@@ -33,9 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implementation detail of the `convert()` wrapper — callers invoking
   converters directly now see `ConversionError` as documented.
 - `SCHEMA_IDS` is now a public mapping on the top-level package (was the
-  private `_SCHEMA_ID`). Use it to enumerate supported data types.
+  private `_SCHEMA_ID`), and is wrapped in ``types.MappingProxyType`` so it
+  is read-only at runtime. Use it to enumerate supported data types.
 - Converter `tz` parameter is now keyword-only, matching `convert()`'s
   keyword-only `tz` kwarg. Internal dispatch passes `tz=tz` explicitly.
+  `day_interval()` is also keyword-only `tz` for symmetry.
+- `oura_raw.heart_rate` no longer silently rounds `bpm` to 1 decimal. It
+  passes the value through unchanged so downstream consumers see the full
+  precision the upstream API reported.
 
 ### Added
 
@@ -46,10 +51,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `..._fall_back`) that lock in correct wall-clock day boundaries across
   March 8 and November 1 2026 Los Angeles transitions.
 - `validate=True` / `validate=False` regression tests confirming the
-  opt-out actually bypasses schema validation.
-- Import-time invariant (`raise RuntimeError`, not `assert`, so it
-  survives `python -O`): `REGISTRY` and `SCHEMA_IDS` must stay in sync,
-  so adding a converter without its schema id fails fast at import.
+  opt-out actually bypasses schema validation (tests monkeypatch at
+  ``omh_shim._validate.validate_output`` — the single stable location
+  both the production code and the tests target).
+- Fractional-precision regression tests for `oura_raw.heart_rate` and
+  `ow_normalized.sleep_duration` (the latter proving the minutes→seconds
+  scale runs BEFORE the int cast so 32.5 min → 1950 s, not 1920 s).
+- Read-only invariants locked in by tests:
+  `test_schema_ids_is_read_only`, `test_registry_is_read_only`,
+  `test_registry_not_leaked_at_top_level`.
+- Two import-time invariants (`raise RuntimeError`, not `assert`, so they
+  survive `python -O`):
+    1. `REGISTRY` and `SCHEMA_IDS` must stay in sync.
+    2. `SCHEMA_IDS` values must match the explicit filename table in
+       `_schema_loader`, preventing latent drift.
+- `_Converter` is now a `typing.Protocol` with the correct
+  `(sample, *, tz) -> dict` signature. mypy catches any converter whose
+  shape diverges from the protocol at type-check time.
+- `REGISTRY` and `SCHEMA_IDS` are wrapped in `types.MappingProxyType` so
+  external code cannot inject converters or schema ids at runtime.
+- mypy `--strict` in CI (via `.github/workflows/test.yml` and
+  `[tool.mypy] strict = true` in `pyproject.toml`). The library is now
+  fully type-annotated (parameterized `dict[str, Any]` throughout).
+
+### Fixed
+
+- `_validate.Draft7Validator` is now cached per schema id via
+  `lru_cache(maxsize=16)` instead of rebuilt on every `convert()` call.
+- `_schema_loader` uses an explicit `schema_id -> filename` lookup table
+  instead of string substitution. The old derivation (`:`→`_`, `.`→`-`)
+  had a latent collision: `omh:a.b:1.0` and `omh:a-b:1.0` would map to
+  the same filename. Fix eliminates the hazard.
+- `set_opt()` applies `scale` BEFORE `cast`, preserving precision for
+  fractional inputs: ``int(32.5 * 60) = 1950`` rather than
+  ``int(32.5) * 60 = 1920``. Existing integer callsites produce the same
+  results; fractional inputs are now correct.
+- `ow_normalized.sleep_duration` follows the same scale-then-cast order.
+- `convert()` error messages now include the wrapped exception type name
+  (``KeyError: 'bpm'`` rather than a bare ``'bpm'`` that looked like a
+  stray quoted string).
+- `day_interval` error message no longer hardcodes the enumeration of
+  daily data types (would have gone stale if a 4th were added).
+- Fixture `tests/fixtures/ow_normalized/heart_rate_expected.json`
+  normalized to `72.0` to match what the converter actually produces
+  (previously `72` int relied on Python dict equality to pass).
 
 ### Fixed
 

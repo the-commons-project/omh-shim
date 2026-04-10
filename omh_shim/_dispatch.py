@@ -1,13 +1,26 @@
 """(source, data_type) -> converter function lookup."""
 
-from collections.abc import Callable
+from collections.abc import Mapping
+from datetime import tzinfo
+from types import MappingProxyType
+from typing import Any, Protocol
 
 from omh_shim.errors import ConversionError
 from omh_shim.sources import oura_raw, ow_normalized
 
-_Converter = Callable[[dict], dict]
 
-REGISTRY: dict[tuple[str, str], _Converter] = {
+class _Converter(Protocol):
+    """Every converter takes a sample dict and a keyword-only timezone,
+    returning a dict-shaped record conforming to its target schema. Daily
+    converters require a non-None ``tz``; timestamp-based converters accept
+    ``None`` but must still receive the kwarg."""
+
+    def __call__(
+        self, sample: dict[str, Any], *, tz: tzinfo | None
+    ) -> dict[str, Any]: ...
+
+
+_REGISTRY_SOURCE: dict[tuple[str, str], _Converter] = {
     ("oura_raw", "heart_rate"):              oura_raw.heart_rate,
     ("oura_raw", "heart_rate_variability"):  oura_raw.heart_rate_variability,
     ("oura_raw", "step_count"):              oura_raw.step_count,
@@ -21,6 +34,10 @@ REGISTRY: dict[tuple[str, str], _Converter] = {
     ("ow_normalized", "sleep_episode"):          ow_normalized.sleep_episode,
     ("ow_normalized", "physical_activity"):      ow_normalized.physical_activity,
 }
+
+# Public view is a read-only proxy so consumers can enumerate the registry
+# without being able to mutate it.
+REGISTRY: Mapping[tuple[str, str], _Converter] = MappingProxyType(_REGISTRY_SOURCE)
 
 
 def lookup(source: str, data_type: str) -> _Converter:

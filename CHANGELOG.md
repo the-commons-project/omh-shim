@@ -27,26 +27,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   converters as `ConversionError` so the public contract ("invalid sample
   shape raises ConversionError") actually holds. Previously converters
   leaked raw `KeyError` in several paths.
+- Converters raise `ConversionError` directly for domain errors (HRV
+  normalized-score rejection, step_count unknown-shape rejection) rather
+  than raw `KeyError`. The exception type is part of the contract, not an
+  implementation detail of the `convert()` wrapper — callers invoking
+  converters directly now see `ConversionError` as documented.
+- `SCHEMA_IDS` is now a public mapping on the top-level package (was the
+  private `_SCHEMA_ID`). Use it to enumerate supported data types.
+- Converter `tz` parameter is now keyword-only, matching `convert()`'s
+  keyword-only `tz` kwarg. Internal dispatch passes `tz=tz` explicitly.
 
 ### Added
 
 - Positive and negative regression tests for all timezone behavior,
   parametrized across every (source, data_type) pair that parses datetimes
   or aggregates days.
-- Import-time invariant check: `REGISTRY` and `_SCHEMA_ID` must stay in
-  sync, so adding a converter without its schema id fails fast at import.
+- DST regression tests (`test_day_interval_handles_spring_forward` and
+  `..._fall_back`) that lock in correct wall-clock day boundaries across
+  March 8 and November 1 2026 Los Angeles transitions.
+- `validate=True` / `validate=False` regression tests confirming the
+  opt-out actually bypasses schema validation.
+- Import-time invariant (`raise RuntimeError`, not `assert`, so it
+  survives `python -O`): `REGISTRY` and `SCHEMA_IDS` must stay in sync,
+  so adding a converter without its schema id fails fast at import.
 
 ### Fixed
 
 - `_validate.Draft7Validator` is now cached per schema id via `lru_cache`
   instead of rebuilt on every `convert()` call — real speedup for bulk
   ingest workloads.
-
-### Refactored (non-behavioral)
-
-- Converters raise `ConversionError` directly rather than relying on the
-  `convert()` wrapper to translate raw `KeyError`. The exception type is
-  part of the contract, not an implementation detail of the wrapper.
 
 ## [0.1.0] — 2026-04-09
 

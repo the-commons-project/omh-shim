@@ -1,16 +1,7 @@
 """Converters for raw Oura v2 API response items -> Open mHealth schemas.
 
-Mapping logic ported with permission from
-https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn .
+Mapping logic ported with permission from dicristea/oura-clinical-workbench.
 See AUTHORS.md.
-
-Converter signature is uniformly
-``(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
-``tz`` is only consulted by daily (``day``-keyed) converters; timestamp-based
-converters ignore it. The uniform shape is deliberate: it keeps dispatch
-simple (one Protocol, one call site) at the cost of timestamp converters
-accepting a ``tz`` they don't use. Splitting into two protocols would force
-``convert()`` to branch on data_type at dispatch time, which is worse.
 """
 
 from collections.abc import Mapping
@@ -28,15 +19,7 @@ from omh_shim.errors import ConversionError
 
 
 def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """``/v2/usercollection/heartrate/data[i]`` -> ``omh:heart-rate:2.0``.
-
-    Input::
-
-        {"bpm": 72, "source": "sleep", "timestamp": "2026-04-09T03:15:00+00:00"}
-
-    Oura's ``source`` string is context (sleep/awake/rest), not device — OW
-    carries it under its own ``source`` metadata when ingesting, so we drop it.
-    """
+    """Input: ``{"bpm": 72, "source": "sleep", "timestamp": "...+00:00"}``"""
     return {
         "heart_rate": unit_value(sample["bpm"], "beats/min"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
@@ -46,14 +29,8 @@ def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
 def heart_rate_variability(
     sample: Mapping[str, Any], *, tz: tzinfo | None
 ) -> dict[str, Any]:
-    """Oura HRV -> ``local:heart-rate-variability:1.0``.
-
-    Oura's ``daily_readiness`` exposes only a normalized 0-100 ``hrv_balance``
-    score, which is NOT a valid HRV in milliseconds. The converter accepts
-    either a top-level ``rmssd`` (from the alternative heartrate rmssd feed)
-    or a ``contributors.hrv_balance_ms`` field explicitly provided in ms.
-    Passing only the 0-100 score raises ``ConversionError``.
-    """
+    """Accepts ``rmssd`` or ``contributors.hrv_balance_ms`` (real ms values).
+    Rejects the normalized 0-100 ``hrv_balance`` score."""
     if "rmssd" in sample:
         value_ms = sample["rmssd"]
     elif isinstance(sample.get("contributors"), dict) and "hrv_balance_ms" in sample["contributors"]:
@@ -78,11 +55,7 @@ def heart_rate_variability(
 
 
 def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """``/v2/usercollection/daily_activity/data[i]`` -> ``omh:step-count:3.0``.
-
-    OMH's step-count:3.0 requires ``effective_time_frame.time_interval``, so
-    the converter uses the day's midnight bounds in the caller-provided ``tz``.
-    """
+    """Input: ``{"day": "2026-04-09", "steps": 8432, ...}``"""
     return {
         "step_count": unit_value(sample["steps"], "steps", cast=int),
         "effective_time_frame": {"time_interval": day_interval(sample["day"], tz=tz)},
@@ -90,8 +63,7 @@ def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
 
 
 def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """Oura sleep/data[i] -> ``omh:sleep-duration:2.0``. Oura already reports
-    ``total_sleep_duration`` in seconds — no unit conversion."""
+    """Input: Oura sleep/data[i] with ``total_sleep_duration`` in seconds."""
     return {
         "sleep_duration": unit_value(sample["total_sleep_duration"], "sec", cast=int),
         "effective_time_frame": {
@@ -101,12 +73,8 @@ def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str,
 
 
 def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """Oura sleep/data[i] -> ``omh:sleep-episode:1.1``.
-
-    Only ``effective_time_frame`` is required. Every optional field that maps
-    1:1 from Oura is populated when present. Oura's ``long_sleep``/``short_sleep``
-    are both main sleep; only ``nap`` is not.
-    """
+    """Input: Oura sleep/data[i]. Oura's ``long_sleep``/``short_sleep`` are
+    both main sleep; only ``nap`` is not."""
     out: dict[str, Any] = {
         "effective_time_frame": {
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
@@ -124,11 +92,7 @@ def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, 
 def physical_activity(
     sample: Mapping[str, Any], *, tz: tzinfo | None
 ) -> dict[str, Any]:
-    """Oura daily_activity/data[i] -> ``omh:physical-activity:1.2``.
-
-    Only ``activity_name`` is schema-required. ``distance`` comes from
-    ``equivalent_walking_distance``; ``kcal_burned`` from ``active_calories``.
-    """
+    """Input: ``{"day": "2026-04-09", "active_calories": 342, ...}``"""
     out: dict[str, Any] = {
         "activity_name": "daily activity summary",
         "effective_time_frame": {"time_interval": day_interval(sample["day"], tz=tz)},

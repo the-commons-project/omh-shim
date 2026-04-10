@@ -44,7 +44,6 @@ def convert(
     tz: tzinfo | None = None,
     validate: bool = True,
     header: bool = False,
-    source_name: str = "omh-shim",
     external_datasheets: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Convert one source sample to one Open mHealth record.
@@ -52,10 +51,9 @@ def convert(
     ``tz`` is required for daily data types (step_count, physical_activity,
     sleep_duration) — pass ``datetime.UTC`` or a ``ZoneInfo``.
 
-    When ``header=True``, wraps the output in the standard IEEE 1752.1 / OMH
-    data-point envelope with ``header`` + ``body``, including UUID, schema_id
-    components, creation timestamp, modality, acquisition provenance, and
-    optional ``external_datasheets``.
+    When ``header=True``, wraps the output in the IEEE 1752.1 data-point
+    envelope (``header`` + ``body``) with UUID, schema_id components,
+    creation timestamp, modality, and optional ``external_datasheets``.
 
     Raises ``ConversionError`` on invalid input, ``ValidationError`` on
     schema mismatch (when ``validate=True``).
@@ -75,7 +73,6 @@ def convert(
     return {
         "header": build_header(
             schema_id,
-            source_name=source_name,
             external_datasheets=external_datasheets,
         ),
         "body": body,

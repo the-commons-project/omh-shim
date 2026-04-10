@@ -119,7 +119,8 @@ def test_daily_types_require_tz(source, data_type, sample):
 @pytest.mark.parametrize("source,data_type,sample", DAILY_CASES)
 def test_daily_types_accept_utc(source, data_type, sample):
     result = convert(source=source, data_type=data_type, sample=sample, tz=UTC)
-    interval = result["effective_time_frame"]["time_interval"]
+    body = result["body"]
+    interval = body["effective_time_frame"]["time_interval"]
     assert interval["start_date_time"] == "2026-04-09T00:00:00Z"
 
 
@@ -127,7 +128,8 @@ def test_daily_types_accept_utc(source, data_type, sample):
 def test_daily_types_respect_non_utc_tz(source, data_type, sample):
     result = convert(source=source, data_type=data_type, sample=sample,
                      tz=ZoneInfo("America/Los_Angeles"))
-    interval = result["effective_time_frame"]["time_interval"]
+    body = result["body"]
+    interval = body["effective_time_frame"]["time_interval"]
     assert interval["start_date_time"] == "2026-04-09T00:00:00-07:00"
 
 
@@ -208,7 +210,7 @@ def test_hrv_schema_is_local_namespace():
 def test_oura_heart_rate_preserves_fractional_bpm():
     result = convert(source="oura_raw", data_type="heart_rate",
                      sample={"bpm": 72.456, "timestamp": "2026-04-09T08:00:00Z"})
-    assert result["heart_rate"]["value"] == 72.456
+    assert result["body"]["heart_rate"]["value"] == 72.456
 
 
 def test_ow_sleep_duration_fractional_minutes():
@@ -216,7 +218,7 @@ def test_ow_sleep_duration_fractional_minutes():
     result = convert(source="ow_normalized", data_type="sleep_duration",
                      sample={"date": "2026-04-09", "sleep_total_duration_minutes": 32.5},
                      tz=UTC)
-    assert result["sleep_duration"]["value"] == 1950
+    assert result["body"]["sleep_duration"]["value"] == 1950
 
 
 # --- validate kwarg ---
@@ -230,25 +232,16 @@ def test_validate_false_skips(monkeypatch):
                      sample={"timestamp": "2026-04-09T08:00:00Z",
                              "type": "heart_rate", "value": 72},
                      validate=False)
-    assert result["heart_rate"]["value"] == 72
+    assert result["body"]["heart_rate"]["value"] == 72
 
 
 # --- header envelope (IEEE 1752.1 / OMH data-point) ---
 
 
-def test_header_false_returns_body_only():
+def test_convert_always_returns_envelope():
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
                              "type": "heart_rate", "value": 72})
-    assert "header" not in result
-    assert "heart_rate" in result
-
-
-def test_header_true_returns_envelope():
-    result = convert(source="ow_normalized", data_type="heart_rate",
-                     sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
     assert "header" in result
     assert "body" in result
     assert result["body"]["heart_rate"]["value"] == 72.0
@@ -257,8 +250,7 @@ def test_header_true_returns_envelope():
 def test_header_has_correct_schema_id_components():
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     sid = result["header"]["schema_id"]
     assert sid == {"namespace": "omh", "name": "heart-rate", "version": "2.0"}
 
@@ -267,24 +259,21 @@ def test_header_has_uuid():
     import uuid as uuid_mod
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     uuid_mod.UUID(result["header"]["uuid"])  # raises ValueError if invalid
 
 
 def test_header_has_sensed_modality():
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     assert result["header"]["modality"] == "sensed"
 
 
 def test_header_has_source_creation_date_time():
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     assert "source_creation_date_time" in result["header"]
 
 
@@ -293,31 +282,26 @@ def test_header_has_no_acquisition_provenance():
     IEEE 1752.1. The header must NOT include it."""
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     assert "acquisition_provenance" not in result["header"]
 
 
-def test_header_external_datasheets():
-    """Matches the JHE data-point examples which include manufacturer info."""
+def test_header_external_datasheets_from_source_metadata():
+    """external_datasheets auto-populated from sample's source metadata."""
     result = convert(
         source="oura_raw", data_type="heart_rate",
-        sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
-        header=True,
-        external_datasheets=[
-            {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
-        ],
+        sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z",
+                "source": {"device": "Oura Ring Gen3"}},
     )
     assert result["header"]["external_datasheets"] == [
-        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
+        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura Ring Gen3"},
     ]
 
 
-def test_header_omits_external_datasheets_when_none():
+def test_header_omits_external_datasheets_when_no_source():
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True)
+                             "type": "heart_rate", "value": 72})
     assert "external_datasheets" not in result["header"]
 
 
@@ -326,7 +310,6 @@ def test_header_local_schema_namespace():
     result = convert(
         source="oura_raw", data_type="heart_rate_variability",
         sample={"rmssd": 42.5, "timestamp": "2026-04-09T08:00:00Z"},
-        header=True,
     )
     sid = result["header"]["schema_id"]
     assert sid == {"namespace": "local", "name": "heart-rate-variability", "version": "1.0"}

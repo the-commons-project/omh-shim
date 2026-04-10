@@ -55,8 +55,8 @@ def day_interval(date_str: str, tz: tzinfo | None) -> dict:
     """
     if tz is None:
         raise ConversionError(
-            "daily data_types (step_count, physical_activity, sleep_duration) "
-            "require a timezone — pass tz=... to convert() so the day boundaries "
+            "this data type aggregates over a calendar day and requires an "
+            "explicit timezone — pass tz=... to convert() so the day boundaries "
             "reflect the user's local calendar day, not UTC"
         )
     start = datetime.fromisoformat(date_str).replace(tzinfo=tz)

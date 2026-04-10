@@ -94,6 +94,29 @@ def test_day_interval_non_utc_shifts_boundaries():
     }
 
 
+def test_day_interval_handles_spring_forward():
+    """DST spring-forward day in LA: the day starts in PST (-08:00) and
+    ends in PDT (-07:00). The end boundary must be midnight LOCAL TIME of
+    the next day, not start + 86400 seconds (which would be 01:00 next day
+    because of the hour jump)."""
+    result = day_interval("2026-03-08", ZoneInfo("America/Los_Angeles"))
+    assert result == {
+        "start_date_time": "2026-03-08T00:00:00-08:00",
+        "end_date_time": "2026-03-09T00:00:00-07:00",
+    }
+
+
+def test_day_interval_handles_fall_back():
+    """DST fall-back day in LA: the day starts in PDT (-07:00) and ends in
+    PST (-08:00). The resulting interval covers 25 real hours (the repeated
+    1-2am hour), which is correct — that IS the user's calendar day."""
+    result = day_interval("2026-11-01", ZoneInfo("America/Los_Angeles"))
+    assert result == {
+        "start_date_time": "2026-11-01T00:00:00-07:00",
+        "end_date_time": "2026-11-02T00:00:00-08:00",
+    }
+
+
 # --- convert() wraps raw python errors as ConversionError ---
 
 
@@ -286,15 +309,66 @@ def test_hrv_schema_is_local_not_omh_namespace():
     """The HRV schema is a placeholder — OMH has not published a canonical
     HRV schema. It must live under the ``local:`` namespace to avoid
     implying OMH-standard interoperability."""
-    from omh_shim import _SCHEMA_ID
+    from omh_shim import SCHEMA_IDS
 
-    assert _SCHEMA_ID["heart_rate_variability"].startswith("local:")
-    assert not _SCHEMA_ID["heart_rate_variability"].startswith("omh:")
+    assert SCHEMA_IDS["heart_rate_variability"].startswith("local:")
+    assert not SCHEMA_IDS["heart_rate_variability"].startswith("omh:")
 
 
 def test_all_top_level_schemas_load():
-    from omh_shim import _SCHEMA_ID
+    from omh_shim import SCHEMA_IDS
     from omh_shim._schema_loader import load
 
-    for schema_id in _SCHEMA_ID.values():
+    for schema_id in SCHEMA_IDS.values():
         assert isinstance(load(schema_id), dict), f"failed to load {schema_id}"
+
+
+# --- validate kwarg ---
+
+
+def test_convert_validate_false_skips_validation(monkeypatch):
+    """``validate=False`` must not call the validator at all. If validation
+    is expensive or a consumer deliberately wants to produce a draft record
+    without enforcing conformance, the opt-out must actually opt out."""
+    import omh_shim
+
+    def explode(*args, **kwargs):
+        raise AssertionError("validate_output must not be called when validate=False")
+
+    monkeypatch.setattr(omh_shim, "validate_output", explode)
+
+    result = convert(
+        source="ow_normalized",
+        data_type="heart_rate",
+        sample={
+            "timestamp": "2026-04-09T08:00:00Z",
+            "type": "heart_rate",
+            "value": 72,
+        },
+        validate=False,
+    )
+    assert result["heart_rate"] == {"value": 72, "unit": "beats/min"}
+
+
+def test_convert_validate_true_calls_validator(monkeypatch):
+    """The flipside: validate=True (default) must call validate_output with
+    the right schema id, so we know the opt-out is actually wired up."""
+    import omh_shim
+
+    calls = []
+    monkeypatch.setattr(
+        omh_shim,
+        "validate_output",
+        lambda output, schema_id: calls.append(schema_id),
+    )
+
+    convert(
+        source="ow_normalized",
+        data_type="heart_rate",
+        sample={
+            "timestamp": "2026-04-09T08:00:00Z",
+            "type": "heart_rate",
+            "value": 72,
+        },
+    )
+    assert calls == ["omh:heart-rate:2.0"]

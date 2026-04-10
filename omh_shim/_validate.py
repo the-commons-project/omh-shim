@@ -18,7 +18,10 @@ from omh_shim._schema_loader import load as load_schema
 from omh_shim.errors import ValidationError
 
 
-@lru_cache(maxsize=32)
+# maxsize is bounded to a small constant: there are currently 6 top-level
+# schema ids (see omh_shim.SCHEMA_IDS). 16 leaves room for future types
+# without making the cache unbounded.
+@lru_cache(maxsize=16)
 def _validator(schema_id: str) -> Draft7Validator:
     """Cached Draft7Validator per schema id. Built once, reused across calls."""
     return Draft7Validator(load_schema(schema_id), registry=_registry())

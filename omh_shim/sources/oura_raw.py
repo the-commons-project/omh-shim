@@ -4,7 +4,7 @@ Mapping logic ported with permission from
 https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn .
 See AUTHORS.md.
 
-Converter signature is uniformly ``(sample: dict, tz: tzinfo | None) -> dict``.
+Converter signature is uniformly ``(sample: dict, *, tz: tzinfo | None) -> dict``.
 ``tz`` is only consulted by daily (``day``-keyed) converters; timestamp-based
 converters ignore it.
 """
@@ -21,7 +21,7 @@ from omh_shim._helpers import (
 from omh_shim.errors import ConversionError
 
 
-def heart_rate(sample: dict, tz: tzinfo | None) -> dict:
+def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
     """``/v2/usercollection/heartrate/data[i]`` -> ``omh:heart-rate:2.0``.
 
     Input::
@@ -37,7 +37,7 @@ def heart_rate(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def heart_rate_variability(sample: dict, tz: tzinfo | None) -> dict:
+def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
     """Oura HRV -> ``local:heart-rate-variability:1.0``.
 
     Oura's ``daily_readiness`` exposes only a normalized 0-100 ``hrv_balance``
@@ -69,7 +69,7 @@ def heart_rate_variability(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def step_count(sample: dict, tz: tzinfo | None) -> dict:
+def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
     """``/v2/usercollection/daily_activity/data[i]`` -> ``omh:step-count:3.0``.
 
     OMH's step-count:3.0 requires ``effective_time_frame.time_interval``, so
@@ -81,7 +81,7 @@ def step_count(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_duration(sample: dict, tz: tzinfo | None) -> dict:
+def sleep_duration(sample: dict, *, tz: tzinfo | None) -> dict:
     """Oura sleep/data[i] -> ``omh:sleep-duration:2.0``. Oura already reports
     ``total_sleep_duration`` in seconds — no unit conversion."""
     return {
@@ -92,7 +92,7 @@ def sleep_duration(sample: dict, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_episode(sample: dict, tz: tzinfo | None) -> dict:
+def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
     """Oura sleep/data[i] -> ``omh:sleep-episode:1.1``.
 
     Only ``effective_time_frame`` is required. Every optional field that maps
@@ -113,7 +113,7 @@ def sleep_episode(sample: dict, tz: tzinfo | None) -> dict:
     return out
 
 
-def physical_activity(sample: dict, tz: tzinfo | None) -> dict:
+def physical_activity(sample: dict, *, tz: tzinfo | None) -> dict:
     """Oura daily_activity/data[i] -> ``omh:physical-activity:1.2``.
 
     Only ``activity_name`` is schema-required. ``distance`` comes from

@@ -1,7 +1,8 @@
 """Shared helpers for source converters."""
 
+import uuid
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any
 
 from omh_shim.errors import ConversionError
@@ -72,6 +73,47 @@ def unit_value(
 ) -> dict[str, Any]:
     """OMH unit_value: ``{"value": cast(value), "unit": unit}``."""
     return {"value": cast(value), "unit": unit}
+
+
+def build_header(
+    schema_id: str,
+    *,
+    source_name: str = "omh-shim",
+    external_datasheets: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Build an IEEE 1752.1 / OMH data-point header matching the JHE envelope.
+
+    Produces the ``header`` half of the standard data-point structure::
+
+        {
+          "header": {
+            "uuid": "...",
+            "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
+            "source_creation_date_time": "...",
+            "modality": "sensed",
+            "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "..."}],
+            "acquisition_provenance": {"source_name": "..."}
+          },
+          "body": { ... }
+        }
+    """
+    namespace, name, version = schema_id.split(":", 2)
+    header: dict[str, Any] = {
+        "uuid": str(uuid.uuid4()),
+        "schema_id": {
+            "namespace": namespace,
+            "name": name,
+            "version": version,
+        },
+        "source_creation_date_time": isoformat(datetime.now(UTC)),
+        "modality": "sensed",
+        "acquisition_provenance": {
+            "source_name": source_name,
+        },
+    }
+    if external_datasheets:
+        header["external_datasheets"] = external_datasheets
+    return header
 
 
 def set_optional(

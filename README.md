@@ -74,10 +74,12 @@ Note: `heart_rate_variability` targets the local placeholder schema
 HRV schema as of 2026-04). The `local:` namespace is deliberate — downstream
 consumers should not assume OMH-standard interoperability for HRV records.
 
-## Design and decisions
+## Mapping references
 
-- Spec: [`docs/specs/2026-04-09-omh-shim-design.md`](docs/specs/2026-04-09-omh-shim-design.md)
-- Plan: [`docs/plans/2026-04-09-omh-shim-v0.1.md`](docs/plans/2026-04-09-omh-shim-v0.1.md)
+Field-by-field documentation of what each converter maps, what it skips, and why:
+
+- [`docs/mappings/oura_raw.md`](docs/mappings/oura_raw.md) — Oura Ring v2 API → OMH
+- [`docs/mappings/ow_normalized.md`](docs/mappings/ow_normalized.md) — Open Wearables normalized API → OMH
 
 ## Credits
 

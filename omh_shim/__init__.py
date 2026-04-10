@@ -19,6 +19,7 @@ SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "sleep_duration": "omh:sleep-duration:2.0",
     "sleep_episode": "omh:sleep-episode:1.1",
     "physical_activity": "omh:physical-activity:1.2",
+    "oxygen_saturation": "omh:oxygen-saturation:2.0",
 })
 """Read-only mapping of data_type -> schema id. ``heart_rate_variability``
 uses a ``local:`` namespace placeholder (OMH has no canonical HRV schema)."""
@@ -36,6 +37,23 @@ if set(SCHEMA_IDS.values()) != _schema_loader.known_ids():
 del _registered
 
 
+def _extract_datasheets(sample: Mapping[str, Any]) -> list[dict[str, str]] | None:
+    """Extract external_datasheets from the sample's source metadata.
+
+    OW samples include ``source.provider`` and ``source.device``. Oura raw
+    samples don't have a source field — the provider is implicit.
+    """
+    source_meta = sample.get("source") if isinstance(sample, Mapping) else None
+    if not source_meta or not isinstance(source_meta, Mapping):
+        return None
+    device = source_meta.get("device") or source_meta.get("device_model")
+    provider = source_meta.get("provider") or source_meta.get("source_name")
+    ref = device or provider
+    if not ref:
+        return None
+    return [{"datasheet_type": "manufacturer", "datasheet_reference": str(ref)}]
+
+
 def convert(
     source: str,
     data_type: str,
@@ -43,17 +61,19 @@ def convert(
     *,
     tz: tzinfo | None = None,
     validate: bool = True,
-    header: bool = False,
-    external_datasheets: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Convert one source sample to one Open mHealth record.
+    """Convert one source sample to one Open mHealth data-point.
+
+    Always returns the full IEEE 1752.1 data-point envelope::
+
+        {"header": {...}, "body": {...}}
+
+    The header includes ``uuid``, ``schema_id``, ``source_creation_date_time``,
+    ``modality``, and ``external_datasheets`` (auto-populated from the sample's
+    source metadata when available).
 
     ``tz`` is required for daily data types (step_count, physical_activity,
     sleep_duration) — pass ``datetime.UTC`` or a ``ZoneInfo``.
-
-    When ``header=True``, wraps the output in the IEEE 1752.1 data-point
-    envelope (``header`` + ``body``) with UUID, schema_id components,
-    creation timestamp, modality, and optional ``external_datasheets``.
 
     Raises ``ConversionError`` on invalid input, ``ValidationError`` on
     schema mismatch (when ``validate=True``).
@@ -68,12 +88,10 @@ def convert(
     schema_id = SCHEMA_IDS[data_type]
     if validate:
         _validate.validate_output(body, schema_id)
-    if not header:
-        return body
     return {
         "header": build_header(
             schema_id,
-            external_datasheets=external_datasheets,
+            external_datasheets=_extract_datasheets(sample),
         ),
         "body": body,
     }

@@ -1,10 +1,12 @@
 """Converters for Open Wearables normalized read-API shapes -> Open mHealth schemas.
 
-Converter signature is uniformly ``(sample: dict, *, tz: tzinfo | None) -> dict``.
+Converter signature is uniformly
+``(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
 ``tz`` is only consulted by daily (``date``-keyed) converters.
 """
 
 from datetime import timedelta, tzinfo
+from typing import Any
 
 from omh_shim._helpers import (
     date_time_frame,
@@ -18,7 +20,7 @@ from omh_shim._helpers import (
 from omh_shim.errors import ConversionError
 
 
-def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
+def heart_rate(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``TimeSeriesSample`` (type=heart_rate) -> ``omh:heart-rate:2.0``.
 
     Input::
@@ -32,7 +34,7 @@ def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
     }
 
 
-def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
+def heart_rate_variability(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``TimeSeriesSample`` (type=heart_rate_variability) -> ``local:heart-rate-variability:1.0``."""
     return {
         "heart_rate_variability": uv(sample["value"], "ms"),
@@ -40,7 +42,7 @@ def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
     }
 
 
-def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
+def step_count(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW step-count input -> ``omh:step-count:3.0``.
 
     Two supported input shapes:
@@ -53,7 +55,7 @@ def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
     """
     if "date" in sample:
         steps = sample["steps"]
-        time_interval = day_interval(sample["date"], tz)
+        time_interval = day_interval(sample["date"], tz=tz)
     elif "timestamp" in sample and sample.get("type") == "steps":
         steps = sample["value"]
         end = parse_datetime(sample["timestamp"])
@@ -71,25 +73,25 @@ def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_duration(sample: dict, *, tz: tzinfo | None) -> dict:
+def sleep_duration(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``ActivitySummary`` (sleep fields) -> ``omh:sleep-duration:2.0``.
 
     OMH requires a ``time_interval`` — uses the caller-provided ``tz`` for day bounds.
     """
     return {
-        "sleep_duration": uv(int(sample["sleep_total_duration_minutes"]) * 60, "sec", cast=int),
-        "effective_time_frame": {"time_interval": day_interval(sample["date"], tz)},
+        "sleep_duration": uv(sample["sleep_total_duration_minutes"] * 60, "sec", cast=int),
+        "effective_time_frame": {"time_interval": day_interval(sample["date"], tz=tz)},
     }
 
 
-def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
+def sleep_episode(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW sleep details -> ``omh:sleep-episode:1.1``.
 
     Only ``effective_time_frame`` is schema-required. OMH sleep-episode:1.1
     does not carry per-stage breakdowns; downstream consumers wanting stages
     should look at sleep-stage-summary schemas (not in v0.1 scope).
     """
-    out: dict = {
+    out: dict[str, Any] = {
         "effective_time_frame": {
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
         }
@@ -102,15 +104,15 @@ def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
     return out
 
 
-def physical_activity(sample: dict, *, tz: tzinfo | None) -> dict:
+def physical_activity(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """OW ``ActivitySummary`` -> ``omh:physical-activity:1.2``.
 
     Only ``activity_name`` is schema-required. Step counts go through the
     dedicated ``step_count`` converter; active minutes are not modeled here.
     """
-    out: dict = {
+    out: dict[str, Any] = {
         "activity_name": "daily activity summary",
-        "effective_time_frame": {"time_interval": day_interval(sample["date"], tz)},
+        "effective_time_frame": {"time_interval": day_interval(sample["date"], tz=tz)},
     }
     set_opt(out, "distance", sample, "distance_meters", unit="m")
     set_opt(out, "kcal_burned", sample, "active_calories_kcal", unit="kcal")

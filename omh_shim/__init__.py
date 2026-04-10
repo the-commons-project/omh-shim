@@ -1,66 +1,62 @@
-"""omh-shim: convert wearable health data to Open mHealth schemas.
+"""omh-shim: convert wearable health data to Open mHealth schemas."""
 
-Public API:
-    convert(source, data_type, sample, *, validate=True) -> dict
-    ConversionError
-    ValidationError
-"""
+from collections.abc import Mapping
+from datetime import tzinfo
+from types import MappingProxyType
+from typing import Any
 
-from omh_shim._dispatch import lookup
-from omh_shim._validate import validate_output
+from omh_shim import _dispatch, _schema_loader, _validate
 from omh_shim.errors import ConversionError, ValidationError
 
-__all__ = ["convert", "ConversionError", "ValidationError"]
+__all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
 __version__ = "0.1.0"
 
-# Public data_type names map to OMH schema ids for output validation.
-_OMH_SCHEMA_ID: dict[str, str] = {
+SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "heart_rate": "omh:heart-rate:2.0",
-    "heart_rate_variability": "omh:heart-rate-variability:1.0",
+    "heart_rate_variability": "local:heart-rate-variability:1.0",
     "step_count": "omh:step-count:3.0",
     "sleep_duration": "omh:sleep-duration:2.0",
     "sleep_episode": "omh:sleep-episode:1.1",
     "physical_activity": "omh:physical-activity:1.2",
-}
+})
+"""Read-only mapping of data_type -> schema id. ``heart_rate_variability``
+uses a ``local:`` namespace placeholder (OMH has no canonical HRV schema)."""
+
+# Fail fast if someone adds a converter without a schema id (or vice versa),
+# or a schema id without a loader filename entry. Uses raise (not assert)
+# so it survives python -O.
+_registered = {dt for (_, dt) in _dispatch.REGISTRY}
+if _registered != SCHEMA_IDS.keys():
+    raise RuntimeError(f"REGISTRY/SCHEMA_IDS drift: {_registered ^ SCHEMA_IDS.keys()}")
+if set(SCHEMA_IDS.values()) != _schema_loader.known_ids():
+    raise RuntimeError(
+        f"SCHEMA_IDS/loader drift: {set(SCHEMA_IDS.values()) ^ _schema_loader.known_ids()}"
+    )
+del _registered
 
 
 def convert(
     source: str,
     data_type: str,
-    sample: dict,
+    sample: Mapping[str, Any],
     *,
+    tz: tzinfo | None = None,
     validate: bool = True,
-) -> dict:
+) -> dict[str, Any]:
     """Convert one source sample to one Open mHealth record.
 
-    Parameters
-    ----------
-    source:
-        Registered source key, e.g. ``"ow_normalized"`` or ``"oura_raw"``.
-    data_type:
-        Target OMH schema name, e.g. ``"heart_rate"`` or ``"sleep_episode"``.
-    sample:
-        Source-specific input dict. Shape depends on ``source`` and
-        ``data_type``; see the relevant converter's docstring.
-    validate:
-        Keyword-only. If True (default), validate the output against the
-        target OMH schema and raise ``ValidationError`` on mismatch.
-
-    Returns
-    -------
-    dict
-        An Open mHealth record conforming to the target schema.
-
-    Raises
-    ------
-    ConversionError
-        No converter registered, or sample shape is invalid.
-    ValidationError
-        Output failed OMH schema validation (only when ``validate=True``).
+    ``tz`` is required for daily data types (step_count, physical_activity,
+    sleep_duration) — pass ``datetime.UTC`` or a ``ZoneInfo``. Raises
+    ``ConversionError`` on invalid input, ``ValidationError`` on schema
+    mismatch (when ``validate=True``).
     """
-    output = lookup(source, data_type)(sample)
+    converter = _dispatch.lookup(source, data_type)
+    try:
+        output = converter(sample, tz=tz)
+    except (KeyError, ValueError, TypeError) as e:
+        raise ConversionError(
+            f"{source}/{data_type}: {type(e).__name__}: {e}"
+        ) from e
     if validate:
-        validate_output(output, _OMH_SCHEMA_ID[data_type])
+        _validate.validate_output(output, SCHEMA_IDS[data_type])
     return output
-
-

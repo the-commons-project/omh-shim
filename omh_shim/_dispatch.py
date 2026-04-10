@@ -28,6 +28,7 @@ REGISTRY: Mapping[tuple[str, str], _Converter] = MappingProxyType({
     ("ow_normalized", "sleep_duration"):         ow_normalized.sleep_duration,
     ("ow_normalized", "sleep_episode"):          ow_normalized.sleep_episode,
     ("ow_normalized", "physical_activity"):      ow_normalized.physical_activity,
+    ("ow_normalized", "oxygen_saturation"):      ow_normalized.oxygen_saturation,
 })
 
 

@@ -102,3 +102,13 @@ def physical_activity(
     set_optional(out, "distance", sample, "distance_meters", unit="m")
     set_optional(out, "kcal_burned", sample, "active_calories_kcal", unit="kcal")
     return out
+
+
+def oxygen_saturation(
+    sample: Mapping[str, Any], *, tz: tzinfo | None
+) -> dict[str, Any]:
+    """Input: OW TimeSeriesSample with type=oxygen_saturation."""
+    return {
+        "oxygen_saturation": unit_value(sample["value"], "%"),
+        "effective_time_frame": date_time_frame(sample["timestamp"]),
+    }

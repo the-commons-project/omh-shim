@@ -1,19 +1,46 @@
-"""Validate converter outputs against vendored OMH schemas."""
+"""Validate converter outputs against vendored OMH schemas.
+
+OMH schemas use ``$ref`` to reference other schemas by relative filename
+(e.g. ``"unit-value-1.x.json"``). All transitively-referenced schemas are
+vendored alongside the top-level OMH schemas in ``omh_shim/schemas/`` so
+ref resolution can be served from local files without network access.
+"""
+
+import importlib.resources
+import json
+from functools import lru_cache
 
 from jsonschema import Draft7Validator
+from referencing import Registry, Resource
+from referencing.jsonschema import DRAFT7
 
 from omh_shim._schema_loader import load as load_schema
 from omh_shim.errors import ValidationError
+
+
+@lru_cache(maxsize=1)
+def _registry() -> Registry:
+    """Build a referencing.Registry that serves every vendored schema by filename."""
+    schemas_pkg = importlib.resources.files("omh_shim.schemas")
+    resources = []
+    for entry in schemas_pkg.iterdir():
+        name = entry.name
+        if not name.endswith(".json"):
+            continue
+        with entry.open("r", encoding="utf-8") as f:
+            doc = json.load(f)
+        resources.append((name, Resource.from_contents(doc, default_specification=DRAFT7)))
+    return Registry().with_resources(resources)
 
 
 def validate_output(output: dict, schema_id: str) -> None:
     """Validate ``output`` against the OMH schema identified by ``schema_id``.
 
     Raises ``ValidationError`` with a human-readable message listing all
-    schema violations. Returns ``None`` on success.
+    violations. Returns ``None`` on success.
     """
     schema = load_schema(schema_id)
-    validator = Draft7Validator(schema)
+    validator = Draft7Validator(schema, registry=_registry())
     errors = sorted(validator.iter_errors(output), key=lambda e: list(e.absolute_path))
     if not errors:
         return

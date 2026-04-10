@@ -20,7 +20,7 @@ _OMH_SCHEMA_ID: dict[str, str] = {
     "step_count": "omh:step-count:3.0",
     "sleep_duration": "omh:sleep-duration:2.0",
     "sleep_episode": "omh:sleep-episode:1.1",
-    "physical_activity": "omh:physical-activity:2.0",
+    "physical_activity": "omh:physical-activity:1.2",
 }
 
 

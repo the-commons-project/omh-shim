@@ -4,12 +4,14 @@ Mapping logic ported with permission from
 https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn .
 See AUTHORS.md.
 
-Converter signature is uniformly ``(sample: dict, *, tz: tzinfo | None) -> dict``.
+Converter signature is uniformly
+``(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]``.
 ``tz`` is only consulted by daily (``day``-keyed) converters; timestamp-based
 converters ignore it.
 """
 
 from datetime import tzinfo
+from typing import Any
 
 from omh_shim._helpers import (
     date_time_frame,
@@ -21,7 +23,7 @@ from omh_shim._helpers import (
 from omh_shim.errors import ConversionError
 
 
-def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
+def heart_rate(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """``/v2/usercollection/heartrate/data[i]`` -> ``omh:heart-rate:2.0``.
 
     Input::
@@ -32,12 +34,12 @@ def heart_rate(sample: dict, *, tz: tzinfo | None) -> dict:
     carries it under its own ``source`` metadata when ingesting, so we drop it.
     """
     return {
-        "heart_rate": uv(round(float(sample["bpm"]), 1), "beats/min"),
+        "heart_rate": uv(sample["bpm"], "beats/min"),
         "effective_time_frame": date_time_frame(sample["timestamp"]),
     }
 
 
-def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
+def heart_rate_variability(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Oura HRV -> ``local:heart-rate-variability:1.0``.
 
     Oura's ``daily_readiness`` exposes only a normalized 0-100 ``hrv_balance``
@@ -69,7 +71,7 @@ def heart_rate_variability(sample: dict, *, tz: tzinfo | None) -> dict:
     }
 
 
-def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
+def step_count(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """``/v2/usercollection/daily_activity/data[i]`` -> ``omh:step-count:3.0``.
 
     OMH's step-count:3.0 requires ``effective_time_frame.time_interval``, so
@@ -77,11 +79,11 @@ def step_count(sample: dict, *, tz: tzinfo | None) -> dict:
     """
     return {
         "step_count": uv(sample["steps"], "steps", cast=int),
-        "effective_time_frame": {"time_interval": day_interval(sample["day"], tz)},
+        "effective_time_frame": {"time_interval": day_interval(sample["day"], tz=tz)},
     }
 
 
-def sleep_duration(sample: dict, *, tz: tzinfo | None) -> dict:
+def sleep_duration(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Oura sleep/data[i] -> ``omh:sleep-duration:2.0``. Oura already reports
     ``total_sleep_duration`` in seconds — no unit conversion."""
     return {
@@ -92,14 +94,14 @@ def sleep_duration(sample: dict, *, tz: tzinfo | None) -> dict:
     }
 
 
-def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
+def sleep_episode(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Oura sleep/data[i] -> ``omh:sleep-episode:1.1``.
 
     Only ``effective_time_frame`` is required. Every optional field that maps
     1:1 from Oura is populated when present. Oura's ``long_sleep``/``short_sleep``
     are both main sleep; only ``nap`` is not.
     """
-    out: dict = {
+    out: dict[str, Any] = {
         "effective_time_frame": {
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
         }
@@ -113,15 +115,15 @@ def sleep_episode(sample: dict, *, tz: tzinfo | None) -> dict:
     return out
 
 
-def physical_activity(sample: dict, *, tz: tzinfo | None) -> dict:
+def physical_activity(sample: dict[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Oura daily_activity/data[i] -> ``omh:physical-activity:1.2``.
 
     Only ``activity_name`` is schema-required. ``distance`` comes from
     ``equivalent_walking_distance``; ``kcal_burned`` from ``active_calories``.
     """
-    out: dict = {
+    out: dict[str, Any] = {
         "activity_name": "daily activity summary",
-        "effective_time_frame": {"time_interval": day_interval(sample["day"], tz)},
+        "effective_time_frame": {"time_interval": day_interval(sample["day"], tz=tz)},
     }
     set_opt(out, "distance", sample, "equivalent_walking_distance", unit="m")
     set_opt(out, "kcal_burned", sample, "active_calories", unit="kcal")

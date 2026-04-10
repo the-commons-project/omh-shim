@@ -9,6 +9,7 @@ ref resolution can be served from local files without network access.
 import importlib.resources
 import json
 from functools import lru_cache
+from typing import Any
 
 from jsonschema import Draft7Validator
 from referencing import Registry, Resource
@@ -42,7 +43,7 @@ def _registry() -> Registry:
     return Registry().with_resources(resources)
 
 
-def validate_output(output: dict, schema_id: str) -> None:
+def validate_output(output: dict[str, Any], schema_id: str) -> None:
     """Validate ``output`` against the OMH schema identified by ``schema_id``.
 
     Raises ``ValidationError`` with a human-readable message listing all

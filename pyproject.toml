@@ -33,6 +33,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.5",
+    "mypy>=1.10",
 ]
 
 [project.urls]
@@ -57,3 +58,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["omh_shim"]
+strict = true
+ignore_missing_imports = true  # referencing, jsonschema have partial stubs

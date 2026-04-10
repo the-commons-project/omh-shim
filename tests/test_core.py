@@ -288,20 +288,14 @@ def test_header_has_source_creation_date_time():
     assert "source_creation_date_time" in result["header"]
 
 
-def test_header_default_source_name():
+def test_header_has_no_acquisition_provenance():
+    """acquisition_provenance is from the older OMH data-point schema, not
+    IEEE 1752.1. The header must NOT include it."""
     result = convert(source="ow_normalized", data_type="heart_rate",
                      sample={"timestamp": "2026-04-09T08:00:00Z",
                              "type": "heart_rate", "value": 72},
                      header=True)
-    assert result["header"]["acquisition_provenance"]["source_name"] == "omh-shim"
-
-
-def test_header_custom_source_name():
-    result = convert(source="ow_normalized", data_type="heart_rate",
-                     sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     header=True, source_name="JupyterHealth Exchange")
-    assert result["header"]["acquisition_provenance"]["source_name"] == "JupyterHealth Exchange"
+    assert "acquisition_provenance" not in result["header"]
 
 
 def test_header_external_datasheets():

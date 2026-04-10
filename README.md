@@ -57,8 +57,8 @@ convert(
 )
 ```
 
-Pass `header=True` to get the full IEEE 1752.1 / OMH data-point envelope
-with UUID, schema_id components, creation timestamp, modality, and optional
+Pass `header=True` to get the full IEEE 1752.1 data-point envelope with
+UUID, schema_id components, creation timestamp, modality, and optional
 `external_datasheets`:
 
 ```python
@@ -67,7 +67,6 @@ convert(
     data_type="heart_rate",
     sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
     header=True,
-    source_name="JupyterHealth Exchange",
     external_datasheets=[
         {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
     ],
@@ -79,8 +78,7 @@ convert(
 #     "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
 #     "source_creation_date_time": "...",
 #     "modality": "sensed",
-#     "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "Oura"}],
-#     "acquisition_provenance": {"source_name": "JupyterHealth Exchange"}
+#     "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "Oura"}]
 #   },
 #   "body": {
 #     "heart_rate": {"value": 72.0, "unit": "beats/min"},

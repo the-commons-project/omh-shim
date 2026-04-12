@@ -37,12 +37,28 @@ if set(SCHEMA_IDS.values()) != _schema_loader.known_ids():
 del _registered
 
 
-def _extract_datasheets(sample: Mapping[str, Any]) -> list[dict[str, str]] | None:
+# Known source -> device name mappings. When the source is known (e.g.
+# "oura_raw"), the device is implicit — the sample itself won't contain
+# a structured source metadata dict like OW normalized samples do.
+_SOURCE_DEVICE_MAP: Mapping[str, str] = MappingProxyType({
+    "oura_raw": "Oura Ring",
+})
+
+
+def _extract_datasheets(
+    sample: Mapping[str, Any], *, source: str | None = None,
+) -> list[dict[str, str]] | None:
     """Extract external_datasheets from the sample's source metadata.
 
-    OW samples include ``source.provider`` and ``source.device``. Oura raw
-    samples don't have a source field — the provider is implicit.
+    OW normalized samples include ``source.provider`` and ``source.device``
+    as a nested dict. Raw samples (e.g. oura_raw) don't — the provider is
+    implicit from the ``source`` parameter and looked up in _SOURCE_DEVICE_MAP.
     """
+    # Check for a known source -> device mapping first
+    if source and source in _SOURCE_DEVICE_MAP:
+        return [{"datasheet_type": "manufacturer", "datasheet_reference": _SOURCE_DEVICE_MAP[source]}]
+
+    # Fall back to extracting from OW-style nested source metadata
     source_meta = sample.get("source") if isinstance(sample, Mapping) else None
     if not source_meta or not isinstance(source_meta, Mapping):
         return None
@@ -91,7 +107,7 @@ def convert(
     return {
         "header": build_header(
             schema_id,
-            external_datasheets=_extract_datasheets(sample),
+            external_datasheets=_extract_datasheets(sample, source=source),
         ),
         "body": body,
     }

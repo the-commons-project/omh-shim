@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omh-shim"
-version = "0.1.0"
+version = "0.2.0"
 description = "Convert wearable health data from vendor schemas to Open mHealth schemas"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,10 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
-dependencies = [
-    "jsonschema>=4.18,<5.0",
-    "referencing>=0.30",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -34,6 +31,10 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "mypy>=1.10",
+    # Runtime validation is not part of the library; tests validate outputs
+    # against vendored OMH schemas using jsonschema.
+    "jsonschema>=4.18,<5.0",
+    "referencing>=0.30",
 ]
 
 [project.urls]
@@ -63,4 +64,4 @@ ignore = ["E501"]
 python_version = "3.11"
 files = ["omh_shim"]
 strict = true
-ignore_missing_imports = true  # referencing, jsonschema have partial stubs
+ignore_missing_imports = true  # jsonschema/referencing used only in tests

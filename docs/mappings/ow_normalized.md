@@ -1,11 +1,11 @@
 # Open Wearables Normalized → Open mHealth Mapping Reference
 
 Source: Open Wearables (OW) read API — `GET /api/v1/external/users/{id}/timeseries` and `GET /api/v1/external/users/{id}/summaries`.
-Converter module: `omh_shim/sources/ow_normalized.py`.
+Converters: `_ow_*` functions in `omh_shim/__init__.py`.
 
 OW normalizes data from multiple device vendors (Oura, Fitbit, etc.) into a common schema before serving it through the read API. The field names below reflect OW's normalized shapes, not any vendor's raw format.
 
-This document covers the **body** content of each converter. For the IEEE 1752.1 data-point header envelope (`header=True`), see [ieee-1752-header.md](ieee-1752-header.md).
+This document covers the **body** content of each converter. For the IEEE 1752.1 data-point header envelope, see [ieee-1752-header.md](ieee-1752-header.md).
 
 ---
 

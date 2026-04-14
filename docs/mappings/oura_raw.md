@@ -1,10 +1,10 @@
 # Oura Raw → Open mHealth Mapping Reference
 
 Source: Oura Ring v2 API (`/v2/usercollection/*`).
-Converter module: `omh_shim/sources/oura_raw.py`.
+Converters: `_oura_*` functions in `omh_shim/__init__.py`.
 Mapping logic ported with permission from [dicristea/oura-clinical-workbench](https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn). See [AUTHORS.md](../../AUTHORS.md).
 
-This document covers the **body** content of each converter. For the IEEE 1752.1 data-point header envelope (`header=True`), see [ieee-1752-header.md](ieee-1752-header.md).
+This document covers the **body** content of each converter. For the IEEE 1752.1 data-point header envelope, see [ieee-1752-header.md](ieee-1752-header.md).
 
 ---
 

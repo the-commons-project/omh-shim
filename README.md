@@ -2,27 +2,31 @@
 
 Convert wearable health data from vendor schemas to [Open mHealth](https://www.openmhealth.org/) schemas.
 
+Single-file, zero-dependency Python library. Converts Oura Ring v2 and Open
+Wearables normalized samples to IEEE 1752.1 data-point envelopes.
+
 ## Status
 
-v0.1 under active development. Public API is stable; converter coverage is expanding.
+v0.2 under active development. Public API is stable; converter coverage is expanding.
 
 ## Install
 
 ```bash
-pip install git+https://github.com/surfdoc/omh-shim.git@v0.1.0
+pip install git+https://github.com/surfdoc/omh-shim.git@v0.2.0
 ```
+
+No runtime dependencies. Pure Python 3.11+.
 
 ## Usage
 
 Timestamp-based data types (one reading at a known instant):
 
 ```python
-from omh_shim import convert
+from omh_shim import to_omh
 
-omh_record = convert(
-    source="ow_normalized",
-    data_type="heart_rate",
-    sample={
+record = to_omh(
+    "ow_normalized", "heart_rate",
+    {
         "timestamp": "2026-04-09T08:30:00+00:00",
         "type": "heart_rate",
         "value": 72,
@@ -32,77 +36,68 @@ omh_record = convert(
 )
 ```
 
-Daily data types (``step_count``, ``physical_activity``, ``sleep_duration``)
-aggregate over a calendar day, so they REQUIRE an explicit timezone so the day
-boundaries reflect the user's local day rather than silently assuming UTC:
+Daily data types (`step_count`, `physical_activity`, `sleep_duration`) aggregate
+over a calendar day and REQUIRE an explicit timezone — day boundaries depend on
+the user's local day, not UTC:
 
 ```python
 from datetime import UTC
 from zoneinfo import ZoneInfo
 
 # UTC-anchored upstream data
-convert(
-    source="oura_raw",
-    data_type="step_count",
-    sample={"day": "2026-04-09", "steps": 8432},
-    tz=UTC,
-)
+to_omh("oura_raw", "step_count", {"day": "2026-04-09", "steps": 8432}, tz=UTC)
 
 # User's local timezone
-convert(
-    source="oura_raw",
-    data_type="step_count",
-    sample={"day": "2026-04-09", "steps": 8432},
+to_omh(
+    "oura_raw", "step_count",
+    {"day": "2026-04-09", "steps": 8432},
     tz=ZoneInfo("America/Los_Angeles"),
 )
 ```
 
-Pass `header=True` to get the full IEEE 1752.1 data-point envelope with
-UUID, schema_id components, creation timestamp, modality, and optional
-`external_datasheets`:
+Every call returns the full IEEE 1752.1 data-point envelope:
 
 ```python
-convert(
-    source="oura_raw",
-    data_type="heart_rate",
-    sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
-    header=True,
-    external_datasheets=[
-        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura"},
-    ],
-)
-# Returns:
-# {
-#   "header": {
-#     "uuid": "...",
-#     "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
-#     "source_creation_date_time": "...",
-#     "modality": "sensed",
-#     "external_datasheets": [{"datasheet_type": "manufacturer", "datasheet_reference": "Oura"}]
-#   },
-#   "body": {
-#     "heart_rate": {"value": 72.0, "unit": "beats/min"},
-#     "effective_time_frame": {"date_time": "2026-04-09T08:00:00Z"}
-#   }
-# }
+{
+    "header": {
+        "uuid": "...",
+        "schema_id": {"namespace": "omh", "name": "heart-rate", "version": "2.0"},
+        "source_creation_date_time": "...",
+        "modality": "sensed",
+        "external_datasheets": [...],  # auto-populated from sample["source"] if present
+    },
+    "body": {
+        "heart_rate": {"value": 72.0, "unit": "beats/min"},
+        "effective_time_frame": {"date_time": "2026-04-09T08:30:00Z"},
+    },
+}
 ```
 
-`convert` raises `ConversionError` for unknown `(source, data_type)` pairs,
-invalid sample shapes, naive (timezone-less) datetimes, or a missing ``tz``
-for daily data types. It raises `ValidationError` if the converter output
-fails schema validation.
+`to_omh` raises `ConvertError` for unknown `(source, data_type)` pairs, invalid
+sample shapes, naive (timezone-less) datetimes, or a missing `tz` for daily
+data types.
 
-## Supported sources and data types (v0.1)
+## Supported sources and data types
 
 | `source` | `data_type` values |
 |---|---|
-| `ow_normalized` | `heart_rate`, `heart_rate_variability`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity` |
+| `ow_normalized` | `heart_rate`, `heart_rate_variability`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity`, `oxygen_saturation` |
 | `oura_raw` | `heart_rate`, `heart_rate_variability`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity` |
 
 Note: `heart_rate_variability` targets the local placeholder schema
 `local:heart-rate-variability:1.0` (Open mHealth has not published a canonical
 HRV schema as of 2026-04). The `local:` namespace is deliberate — downstream
 consumers should not assume OMH-standard interoperability for HRV records.
+
+## Schema validation
+
+The library does not validate its output against JSON schemas at runtime —
+correctness is enforced by the test suite, which validates every converter
+output against the vendored OMH schemas using `jsonschema`. If your application
+needs runtime validation, install `jsonschema` and validate on your side.
+
+The vendored schemas ship with the package under `omh_shim.schemas` for
+reference and for downstream runtime validation if you need it.
 
 ## Mapping references
 
@@ -112,8 +107,8 @@ consumers should not assume OMH-standard interoperability for HRV records.
 
 ## Credits
 
-`omh_shim/sources/oura_raw.py` ports converter mapping logic with permission
-from [dicristea/oura-clinical-workbench](https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn).
+Oura converter mapping logic ported with permission from
+[dicristea/oura-clinical-workbench](https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn).
 See [AUTHORS.md](AUTHORS.md).
 
 ## License

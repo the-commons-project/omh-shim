@@ -5,6 +5,32 @@ All notable changes to omh-shim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — Unreleased
+
+### Changed — BREAKING
+
+- `convert()` renamed to `to_omh()` for clarity ("convert to what?" → "to OMH").
+- `ConversionError` + `ValidationError` collapsed into a single `ConvertError`.
+  Consumers never distinguished between them in practice.
+- Runtime schema validation removed. The library no longer depends on
+  `jsonschema` or `referencing` — correctness is enforced by the test suite,
+  which validates every converter output against vendored OMH schemas. Apps
+  that want runtime validation can install `jsonschema` and validate on their
+  side; the vendored schemas still ship under `omh_shim.schemas`.
+- `to_omh()` no longer accepts a `validate` kwarg (always returns the envelope,
+  no optional bypass since there's nothing to bypass).
+- Internal module layout collapsed from 9 files to 1. `omh_shim/_helpers.py`,
+  `_dispatch.py`, `_schema_loader.py`, `_validate.py`, `errors.py`, and
+  `sources/oura_raw.py` + `sources/ow_normalized.py` are all inlined into
+  `omh_shim/__init__.py`. Downstream code using only the public API
+  (`to_omh`, `ConvertError`, `SCHEMA_IDS`) is unaffected.
+
+### Removed
+
+- Boot-time REGISTRY/SCHEMA_IDS/schema-loader drift detection. One source of
+  truth replaces three-way cross-checks.
+- `typing.Protocol`-based `_Converter` type. Replaced with plain `Callable`.
+
 ## [Unreleased]
 
 ### Changed — BREAKING
@@ -122,9 +148,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Attribution
 
-- `omh_shim/sources/oura_raw/` ports converter mapping logic from
+- Oura converter mapping logic ported from
   [dicristea/oura-clinical-workbench/data_syn](https://github.com/dicristea/oura-clinical-workbench/tree/main/data_syn)
-  with permission. Each `oura_raw` source file carries an attribution header.
+  with permission.
 
 ### Known limitations
 

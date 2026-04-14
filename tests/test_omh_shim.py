@@ -17,7 +17,14 @@ from jsonschema import Draft7Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT7
 
-from omh_shim import SCHEMA_IDS, ConvertError, to_omh
+from omh_shim import (
+    SCHEMA_IDS,
+    ConversionError,
+    ConvertError,
+    ValidationError,
+    convert,
+    to_omh,
+)
 from omh_shim import _day_interval as day_interval
 from omh_shim import _parse_dt as parse_datetime
 
@@ -152,8 +159,8 @@ def test_unknown_pair_raises():
         {"bpm": None, "timestamp": "2026-04-09T08:00:00Z"},  # TypeError: float(None)
     ],
 )
-def test_converter_errors_wrapped_as_convert_error(sample):
-    with pytest.raises(ConvertError):
+def test_converter_errors_wrapped_as_conversion_error(sample):
+    with pytest.raises(ConversionError):
         to_omh("oura_raw", "heart_rate", sample)
 
 
@@ -366,3 +373,66 @@ def test_header_local_namespace_for_hrv():
         "name": "heart-rate-variability",
         "version": "1.0",
     }
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility with omh-shim 0.1.x
+# ---------------------------------------------------------------------------
+
+
+def test_convert_alias_works():
+    """``convert`` is a deprecated alias for ``to_omh``. Must still work."""
+    result = convert(
+        "ow_normalized",
+        "heart_rate",
+        {"timestamp": "2026-04-09T08:00:00Z", "type": "heart_rate", "value": 72},
+    )
+    assert result["body"]["heart_rate"] == {"value": 72.0, "unit": "beats/min"}
+
+
+def test_conversion_error_catches_legacy_code():
+    """Legacy code catching ConversionError must still work."""
+    with pytest.raises(ConversionError):
+        convert("oura_raw", "heart_rate", {})
+
+
+def test_convert_error_base_catches_all():
+    """New code catching ConvertError catches both conversion and validation failures."""
+    with pytest.raises(ConvertError):
+        convert("oura_raw", "heart_rate", {})
+
+
+def test_validate_true_runs_jsonschema():
+    """``validate=True`` validates output against OMH schema."""
+    result = to_omh(
+        "oura_raw",
+        "heart_rate",
+        {"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
+        validate=True,
+    )
+    assert result["body"]["heart_rate"]["value"] == 72.0
+
+
+def test_validate_true_raises_validation_error_on_bad_output(monkeypatch):
+    """If converter output doesn't conform to the schema, raise ValidationError."""
+    # Force a broken body by monkeypatching the registry's converter to return
+    # an invalid shape. This tests the validation path itself, not the converters.
+    from omh_shim import _REGISTRY
+
+    def broken(_sample, *, tz):
+        return {"heart_rate": {"value": "not_a_number", "unit": "beats/min"}}
+
+    monkeypatch.setitem(_REGISTRY, ("oura_raw", "heart_rate"), broken)
+    with pytest.raises(ValidationError):
+        to_omh(
+            "oura_raw",
+            "heart_rate",
+            {"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
+            validate=True,
+        )
+
+
+def test_validation_error_is_subclass_of_convert_error():
+    """Legacy code catching ConvertError or ValidationError works equivalently."""
+    assert issubclass(ValidationError, ConvertError)
+    assert issubclass(ConversionError, ConvertError)

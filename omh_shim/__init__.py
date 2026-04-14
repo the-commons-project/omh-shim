@@ -25,12 +25,31 @@ from datetime import UTC, datetime, timedelta, tzinfo
 from types import MappingProxyType
 from typing import Any
 
-__all__ = ["to_omh", "ConvertError", "SCHEMA_IDS"]
+__all__ = [
+    "to_omh",
+    "convert",  # deprecated alias for to_omh
+    "ConvertError",
+    "ConversionError",
+    "ValidationError",
+    "SCHEMA_IDS",
+]
 __version__ = "0.2.0"
 
 
 class ConvertError(Exception):
-    """Raised when a sample cannot be converted to a valid OMH data point."""
+    """Base class for all omh-shim errors.
+    Catch ``ConvertError`` to handle both conversion and validation failures."""
+
+
+class ConversionError(ConvertError):
+    """Raised when a sample cannot be converted to a valid OMH data point
+    (bad input shape, missing required fields, naive datetimes, etc.)."""
+
+
+class ValidationError(ConvertError):
+    """Raised when converter output does not conform to its target OMH schema.
+    Only raised when ``to_omh(..., validate=True)`` and ``jsonschema`` is
+    installed (via ``pip install omh-shim[validate]``)."""
 
 
 # ---------------------------------------------------------------------------
@@ -42,13 +61,13 @@ def _parse_dt(value: Any) -> datetime:
     """Parse ISO-8601 into a tz-aware datetime. Rejects naive datetimes —
     silent UTC coercion is a clinical-data footgun."""
     if not isinstance(value, str):
-        raise ConvertError(f"expected ISO-8601 string, got {type(value).__name__}")
+        raise ConversionError(f"expected ISO-8601 string, got {type(value).__name__}")
     try:
         dt = datetime.fromisoformat(value.strip())
     except ValueError as e:
-        raise ConvertError(f"invalid ISO-8601 datetime: {value!r}") from e
+        raise ConversionError(f"invalid ISO-8601 datetime: {value!r}") from e
     if dt.tzinfo is None:
-        raise ConvertError(
+        raise ConversionError(
             f"datetime {value!r} has no timezone; omh-shim requires explicit "
             "timezone offsets to avoid silently misaligning clinical data"
         )
@@ -69,16 +88,16 @@ def _time_frame(ts: Any) -> dict[str, Any]:
 
 def _day_interval(date_str: str, *, tz: tzinfo | None) -> dict[str, Any]:
     if tz is None:
-        raise ConvertError(
+        raise ConversionError(
             "this data type requires an explicit timezone — pass tz=... to "
             "to_omh() so day boundaries reflect the user's local calendar day"
         )
     if "T" in date_str:
-        raise ConvertError(f"expected YYYY-MM-DD date, got datetime: {date_str!r}")
+        raise ConversionError(f"expected YYYY-MM-DD date, got datetime: {date_str!r}")
     try:
         start = datetime.fromisoformat(date_str).replace(tzinfo=tz)
     except ValueError as e:
-        raise ConvertError(f"invalid YYYY-MM-DD date: {date_str!r}") from e
+        raise ConversionError(f"invalid YYYY-MM-DD date: {date_str!r}") from e
     end = start + timedelta(days=1)
     return {"start_date_time": _iso(start), "end_date_time": _iso(end)}
 
@@ -120,14 +139,14 @@ def _oura_heart_rate_variability(s: Mapping[str, Any], *, tz: tzinfo | None) -> 
     elif isinstance(s.get("contributors"), dict) and "hrv_balance_ms" in s["contributors"]:
         ms = s["contributors"]["hrv_balance_ms"]
     else:
-        raise ConvertError(
+        raise ConversionError(
             "oura_raw heart_rate_variability requires either 'rmssd' or "
             "'contributors.hrv_balance_ms' — the normalized 0-100 hrv_balance "
             "score is not a valid HRV measurement in milliseconds"
         )
     ts = s.get("timestamp") or s.get("day")
     if ts is None:
-        raise ConvertError("oura_raw heart_rate_variability requires 'timestamp' or 'day'")
+        raise ConversionError("oura_raw heart_rate_variability requires 'timestamp' or 'day'")
     return {"heart_rate_variability": _uv(ms, "ms"), "effective_time_frame": _time_frame(ts)}
 
 
@@ -195,7 +214,7 @@ def _ow_step_count(s: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]
         end = _parse_dt(s["timestamp"])
         ti = {"start_date_time": _iso(end - timedelta(minutes=1)), "end_date_time": _iso(end)}
     else:
-        raise ConvertError(
+        raise ConversionError(
             "ow_normalized step_count input must have either {'date', 'steps'} "
             "or {'timestamp', 'type': 'steps', 'value'}"
         )
@@ -326,22 +345,82 @@ def to_omh(
     sample: Mapping[str, Any],
     *,
     tz: tzinfo | None = None,
+    validate: bool = False,
 ) -> dict[str, Any]:
     """Convert one source sample to one Open mHealth data-point envelope.
 
     Returns ``{"header": {...}, "body": {...}}`` (IEEE 1752.1).
 
     ``tz`` is required for daily data types (step_count, physical_activity,
-    sleep_duration). Raises ``ConvertError`` on invalid input.
+    sleep_duration).
+
+    ``validate=True`` runs the output through jsonschema against the target
+    OMH schema and raises ``ValidationError`` on mismatch. This requires the
+    optional ``jsonschema`` dependency — install with
+    ``pip install omh-shim[validate]``. If ``validate=True`` and jsonschema
+    is not installed, ``ImportError`` is raised with an install hint.
+
+    Raises ``ConversionError`` on invalid input, ``ValidationError`` on
+    schema mismatch (only when ``validate=True``).
     """
     converter = _REGISTRY.get((source, data_type))
     if converter is None:
-        raise ConvertError(f"No converter for source={source!r} data_type={data_type!r}")
+        raise ConversionError(f"No converter for source={source!r} data_type={data_type!r}")
     try:
         body = converter(sample, tz=tz)
     except (KeyError, ValueError, TypeError) as e:
-        raise ConvertError(f"{source}/{data_type}: {type(e).__name__}: {e}") from e
+        raise ConversionError(f"{source}/{data_type}: {type(e).__name__}: {e}") from e
+    schema_id = SCHEMA_IDS[data_type]
+    if validate:
+        _validate_output(body, schema_id)
     return {
-        "header": _header(SCHEMA_IDS[data_type], datasheets=_datasheets(sample)),
+        "header": _header(schema_id, datasheets=_datasheets(sample)),
         "body": body,
     }
+
+
+def _validate_output(body: dict[str, Any], schema_id: str) -> None:
+    """Validate ``body`` against ``schema_id`` using jsonschema (optional dep)."""
+    try:
+        import importlib.resources
+        import json
+
+        from jsonschema import Draft7Validator
+        from referencing import Registry, Resource
+        from referencing.jsonschema import DRAFT7
+    except ImportError as e:
+        raise ImportError(
+            "Runtime schema validation requires the 'jsonschema' extra. "
+            "Install with: pip install omh-shim[validate]"
+        ) from e
+
+    filenames = {
+        "omh:heart-rate:2.0": "omh_heart-rate_2-0.json",
+        "local:heart-rate-variability:1.0": "local_heart-rate-variability_1-0.json",
+        "omh:step-count:3.0": "omh_step-count_3-0.json",
+        "omh:sleep-duration:2.0": "omh_sleep-duration_2-0.json",
+        "omh:sleep-episode:1.1": "omh_sleep-episode_1-1.json",
+        "omh:physical-activity:1.2": "omh_physical-activity_1-2.json",
+        "omh:oxygen-saturation:2.0": "omh_oxygen-saturation_2-0.json",
+    }
+    schemas_pkg = importlib.resources.files("omh_shim.schemas")
+    resources = []
+    for entry in schemas_pkg.iterdir():
+        if entry.name.endswith(".json"):
+            with entry.open("r", encoding="utf-8") as f:
+                resources.append(
+                    (entry.name, Resource.from_contents(json.load(f), default_specification=DRAFT7))
+                )
+    with schemas_pkg.joinpath(filenames[schema_id]).open("r", encoding="utf-8") as f:
+        validator = Draft7Validator(json.load(f), registry=Registry().with_resources(resources))
+    errors = sorted(validator.iter_errors(body), key=lambda e: list(e.absolute_path))
+    if errors:
+        pieces = [
+            f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}" for e in errors
+        ]
+        raise ValidationError(f"Output does not conform to {schema_id}: " + "; ".join(pieces))
+
+
+# Deprecated alias for backward compatibility with omh-shim 0.1.x.
+# Will be removed in a future major version (see CHANGELOG).
+convert = to_omh

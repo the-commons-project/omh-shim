@@ -12,10 +12,15 @@ v0.2 under active development. Public API is stable; converter coverage is expan
 ## Install
 
 ```bash
-pip install git+https://github.com/surfdoc/omh-shim.git@v0.2.0
+# Minimal install — zero runtime dependencies
+pip install git+https://github.com/the-commons-project/omh-shim.git@v0.2.0
+
+# With optional runtime schema validation (pulls in jsonschema)
+pip install "git+https://github.com/the-commons-project/omh-shim.git@v0.2.0#egg=omh-shim[validate]"
 ```
 
-No runtime dependencies. Pure Python 3.11+.
+Pure Python 3.11+. Core library has no runtime dependencies; the `[validate]`
+extra adds `jsonschema` + `referencing` for opt-in schema validation.
 
 ## Usage
 
@@ -73,9 +78,23 @@ Every call returns the full IEEE 1752.1 data-point envelope:
 }
 ```
 
-`to_omh` raises `ConvertError` for unknown `(source, data_type)` pairs, invalid
-sample shapes, naive (timezone-less) datetimes, or a missing `tz` for daily
-data types.
+`to_omh` raises `ConversionError` for unknown `(source, data_type)` pairs,
+invalid sample shapes, naive (timezone-less) datetimes, or a missing `tz` for
+daily data types. Both `ConversionError` and `ValidationError` are subclasses
+of `ConvertError`; catch the base class to handle both.
+
+### Backward compatibility
+
+The 0.1.x public API still works unchanged:
+
+```python
+from omh_shim import convert, ConversionError, ValidationError
+
+record = convert("oura_raw", "heart_rate", sample, tz=UTC)
+```
+
+`convert` is a deprecated alias for `to_omh`. `ConversionError` and
+`ValidationError` are preserved as distinct exception classes.
 
 ## Supported sources and data types
 
@@ -91,13 +110,33 @@ consumers should not assume OMH-standard interoperability for HRV records.
 
 ## Schema validation
 
-The library does not validate its output against JSON schemas at runtime —
-correctness is enforced by the test suite, which validates every converter
-output against the vendored OMH schemas using `jsonschema`. If your application
-needs runtime validation, install `jsonschema` and validate on your side.
+By default, the library does not validate its output against JSON schemas at
+runtime — correctness is enforced by the test suite, which validates every
+converter output against the vendored OMH schemas.
 
-The vendored schemas ship with the package under `omh_shim.schemas` for
-reference and for downstream runtime validation if you need it.
+For runtime validation, install the `[validate]` extra and pass
+`validate=True`:
+
+```bash
+pip install omh-shim[validate]
+```
+
+```python
+from omh_shim import to_omh, ValidationError
+
+try:
+    record = to_omh("oura_raw", "heart_rate", sample, validate=True)
+except ValidationError as e:
+    # Output did not conform to the target OMH schema
+    ...
+```
+
+If you pass `validate=True` without installing the `[validate]` extra,
+`to_omh` raises `ImportError` with an install hint.
+
+The vendored schemas ship with the package under `omh_shim.schemas` and are
+available for reference regardless of whether the `[validate]` extra is
+installed.
 
 ## Mapping references
 

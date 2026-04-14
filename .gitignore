@@ -29,3 +29,6 @@ env/
 # Secrets / local config
 .env
 .env.local
+
+# AI assistant working artifacts
+.claude/

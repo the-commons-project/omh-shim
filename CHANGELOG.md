@@ -7,29 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] — Unreleased
 
-### Changed — BREAKING
+**Non-breaking release.** All 0.1.x public API continues to work unchanged.
+The 0.2.0 work focuses on internal simplification (9 files → 1, removing
+boot-time invariant checks and `Protocol`-based type wrappers) and making
+runtime schema validation an opt-in extra rather than a required dependency.
 
-- `convert()` renamed to `to_omh()` for clarity ("convert to what?" → "to OMH").
-- `ConversionError` + `ValidationError` collapsed into a single `ConvertError`.
-  Consumers never distinguished between them in practice.
-- Runtime schema validation removed. The library no longer depends on
-  `jsonschema` or `referencing` — correctness is enforced by the test suite,
-  which validates every converter output against vendored OMH schemas. Apps
-  that want runtime validation can install `jsonschema` and validate on their
-  side; the vendored schemas still ship under `omh_shim.schemas`.
-- `to_omh()` no longer accepts a `validate` kwarg (always returns the envelope,
-  no optional bypass since there's nothing to bypass).
+### Added
+
+- `to_omh()` — new primary name for the conversion function. Clearer than
+  `convert()` ("convert to what?"). `convert` is kept as a deprecated alias.
+- `ConvertError` — new base class for all library errors. `ConversionError`
+  and `ValidationError` are now subclasses, so `except ConvertError:` catches
+  both. Legacy code catching either subclass still works.
+- `[validate]` optional extras. `pip install omh-shim[validate]` pulls in
+  `jsonschema` and `referencing` for opt-in runtime schema validation via
+  `to_omh(..., validate=True)`.
+
+### Changed
+
+- Default for `validate` kwarg changed from `True` to `False`. The core
+  library no longer requires `jsonschema`/`referencing`; they are optional
+  extras. Callers who want runtime validation must explicitly opt in with
+  `validate=True` and install the `[validate]` extra.
 - Internal module layout collapsed from 9 files to 1. `omh_shim/_helpers.py`,
   `_dispatch.py`, `_schema_loader.py`, `_validate.py`, `errors.py`, and
-  `sources/oura_raw.py` + `sources/ow_normalized.py` are all inlined into
-  `omh_shim/__init__.py`. Downstream code using only the public API
-  (`to_omh`, `ConvertError`, `SCHEMA_IDS`) is unaffected.
+  `sources/oura_raw.py` + `sources/ow_normalized.py` are inlined into
+  `omh_shim/__init__.py`. Downstream code importing only from the top-level
+  `omh_shim` package is unaffected.
 
 ### Removed
 
 - Boot-time REGISTRY/SCHEMA_IDS/schema-loader drift detection. One source of
   truth replaces three-way cross-checks.
 - `typing.Protocol`-based `_Converter` type. Replaced with plain `Callable`.
+
+### Deprecated
+
+- `convert()` — use `to_omh()` in new code. No removal timeline; will live
+  for at least one more major version.
 
 ## [Unreleased]
 

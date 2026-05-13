@@ -37,21 +37,35 @@ if set(SCHEMA_IDS.values()) != _schema_loader.known_ids():
 del _registered
 
 
-def _extract_datasheets(sample: Mapping[str, Any]) -> list[dict[str, str]] | None:
+_SOURCE_DEVICE_MAP: Mapping[str, str] = MappingProxyType({
+    "oura_raw": "Oura Ring",
+})
+
+
+def _extract_datasheets(
+    sample: Mapping[str, Any], *, source: str | None = None,
+) -> list[dict[str, str]] | None:
     """Extract external_datasheets from the sample's source metadata.
 
-    OW samples include ``source.provider`` and ``source.device``. Oura raw
-    samples don't have a source field — the provider is implicit.
+    OW normalized samples include ``source.provider`` and ``source.device``
+    as a nested dict; that more-specific metadata wins when present. Raw
+    samples (e.g. ``oura_raw``) don't carry a source field — for those, the
+    device is implicit from the ``source`` parameter and resolved via
+    ``_SOURCE_DEVICE_MAP``.
     """
     source_meta = sample.get("source") if isinstance(sample, Mapping) else None
-    if not source_meta or not isinstance(source_meta, Mapping):
-        return None
-    device = source_meta.get("device") or source_meta.get("device_model")
-    provider = source_meta.get("provider") or source_meta.get("source_name")
-    ref = device or provider
-    if not ref:
-        return None
-    return [{"datasheet_type": "manufacturer", "datasheet_reference": str(ref)}]
+    if isinstance(source_meta, Mapping):
+        device = source_meta.get("device") or source_meta.get("device_model")
+        provider = source_meta.get("provider") or source_meta.get("source_name")
+        ref = device or provider
+        if ref:
+            return [{"datasheet_type": "manufacturer", "datasheet_reference": str(ref)}]
+    if source and source in _SOURCE_DEVICE_MAP:
+        return [{
+            "datasheet_type": "manufacturer",
+            "datasheet_reference": _SOURCE_DEVICE_MAP[source],
+        }]
+    return None
 
 
 def convert(
@@ -91,7 +105,7 @@ def convert(
     return {
         "header": build_header(
             schema_id,
-            external_datasheets=_extract_datasheets(sample),
+            external_datasheets=_extract_datasheets(sample, source=source),
         ),
         "body": body,
     }

@@ -305,6 +305,17 @@ def test_header_omits_external_datasheets_when_no_source():
     assert "external_datasheets" not in result["header"]
 
 
+def test_header_external_datasheets_oura_raw_implicit_device():
+    """oura_raw samples lack nested source metadata; the device is implicit."""
+    result = convert(
+        source="oura_raw", data_type="heart_rate",
+        sample={"bpm": 72, "timestamp": "2026-04-09T08:00:00Z"},
+    )
+    assert result["header"]["external_datasheets"] == [
+        {"datasheet_type": "manufacturer", "datasheet_reference": "Oura Ring"},
+    ]
+
+
 def test_header_local_schema_namespace():
     """HRV uses the local: namespace — header.schema_id must reflect that."""
     result = convert(

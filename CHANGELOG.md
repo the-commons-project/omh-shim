@@ -5,6 +5,17 @@ All notable changes to omh-shim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `oura_raw` samples now produce an `external_datasheets` entry in the IEEE
+  1752.1 header (`{datasheet_reference: "Oura Ring"}`). Previously the header
+  omitted `external_datasheets` for `oura_raw` because raw samples don't carry
+  a nested `source` dict, leaving downstream consumers without manufacturer
+  provenance. Nested `source.device`/`source.provider` metadata still wins
+  when present.
+
 ## [1.0.0] — 2026-05-13
 
 ### Changed — BREAKING

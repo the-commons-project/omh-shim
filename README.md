@@ -9,7 +9,7 @@ v1.0 — initial public release. Public API is stable; converter coverage will c
 ## Install
 
 ```bash
-pip install git+https://github.com/jupyterhealth/omh-shim.git@v1.0.0
+pip install git+https://github.com/jupyterhealth/omh-shim.git@v1.0.1
 ```
 
 ## Usage

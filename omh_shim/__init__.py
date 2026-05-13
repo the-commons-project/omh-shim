@@ -10,7 +10,7 @@ from omh_shim._helpers import build_header
 from omh_shim.errors import ConversionError, ValidationError
 
 __all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "heart_rate": "omh:heart-rate:2.0",

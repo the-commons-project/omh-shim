@@ -4,12 +4,12 @@ Convert wearable health data from vendor schemas to [Open mHealth](https://www.o
 
 ## Status
 
-v0.1 under active development. Public API is stable; converter coverage is expanding.
+v1.0 — initial public release. Public API is stable; converter coverage will continue to expand.
 
 ## Install
 
 ```bash
-pip install git+https://github.com/surfdoc/omh-shim.git@v0.1.0
+pip install git+https://github.com/jupyterhealth/omh-shim.git@v1.0.0
 ```
 
 ## Usage
@@ -92,7 +92,7 @@ invalid sample shapes, naive (timezone-less) datetimes, or a missing ``tz``
 for daily data types. It raises `ValidationError` if the converter output
 fails schema validation.
 
-## Supported sources and data types (v0.1)
+## Supported sources and data types (v1.0)
 
 | `source` | `data_type` values |
 |---|---|

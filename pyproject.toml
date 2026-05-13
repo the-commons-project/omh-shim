@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omh-shim"
-version = "0.1.0"
+version = "1.0.0"
 description = "Convert wearable health data from vendor schemas to Open mHealth schemas"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,8 +37,8 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/surfdoc/omh-shim"
-Issues = "https://github.com/surfdoc/omh-shim/issues"
+Repository = "https://github.com/jupyterhealth/omh-shim"
+Issues = "https://github.com/jupyterhealth/omh-shim/issues"
 
 [tool.setuptools.packages.find]
 include = ["omh_shim*"]

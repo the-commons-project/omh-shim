@@ -11,6 +11,7 @@ import pytest
 
 from omh_shim import SCHEMA_IDS, ConversionError, ValidationError, convert
 from omh_shim._helpers import day_interval, parse_datetime
+from omh_shim._schema_loader import HEADER_SCHEMA_ID
 
 # --- public API ---
 
@@ -224,17 +225,6 @@ def test_ow_sleep_duration_fractional_minutes():
 # --- validate kwarg ---
 
 
-def test_validate_false_skips(monkeypatch):
-    from omh_shim import _validate
-    monkeypatch.setattr(_validate, "validate_output",
-                        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not call")))
-    result = convert(source="ow_normalized", data_type="heart_rate",
-                     sample={"timestamp": "2026-04-09T08:00:00Z",
-                             "type": "heart_rate", "value": 72},
-                     validate=False)
-    assert result["body"]["heart_rate"]["value"] == 72
-
-
 # --- header envelope (IEEE 1752.1 / OMH data-point) ---
 
 
@@ -324,3 +314,96 @@ def test_header_local_schema_namespace():
     )
     sid = result["header"]["schema_id"]
     assert sid == {"namespace": "local", "name": "heart-rate-variability", "version": "1.0"}
+
+
+def test_validate_raises_on_remote_ref():
+    """Unknown $ref URIs must fail loudly via NoNetwork, not fetch over the network."""
+    from jsonschema import Draft7Validator
+
+    from omh_shim._validate import _registry
+
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$ref": "https://example.invalid/never-resolvable.json"
+    }
+    validator = Draft7Validator(schema, registry=_registry())
+    # iter_errors raises when a $ref can't be resolved; the NoNetwork retriever
+    # ensures the underlying cause is an explicit RuntimeError marking the URI
+    # as blocked, rather than a silent fetch attempt or a generic Unresolvable.
+    with pytest.raises(Exception) as exc_info:
+        list(validator.iter_errors({}))
+    chain_msgs = []
+    err = exc_info.value
+    while err is not None:
+        chain_msgs.append(str(err))
+        err = err.__cause__
+    combined = " | ".join(chain_msgs)
+    assert "Remote" in combined or "blocked" in combined, (
+        f"Expected NoNetwork marker in error chain, got: {combined}"
+    )
+
+
+def test_registry_resolves_w3id_refs():
+    """A schema referencing a w3id IEEE URL must resolve from the local registry."""
+    from jsonschema import Draft7Validator
+
+    from omh_shim._validate import _registry
+
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$ref": "https://w3id.org/ieee/ieee-1752-schema/header-1.0.json"
+    }
+    validator = Draft7Validator(schema, registry=_registry())
+    # If the $ref doesn't resolve, this raises. Validating an empty object
+    # against the IEEE header should produce errors (required fields missing),
+    # not a fetch attempt.
+    errors = list(validator.iter_errors({}))
+    assert errors  # missing required fields
+    assert all("Remote" not in str(e) for e in errors), \
+        "Should not have hit NoNetwork — w3id ref should resolve locally"
+
+
+# --- header validation against IEEE 1752.1 ---
+
+
+def test_header_validates_against_ieee_schema():
+    """Every (source, data_type) fixture produces an IEEE-valid header."""
+    import json
+    from datetime import UTC
+    from pathlib import Path
+
+    FIXTURES = Path(__file__).parent / "fixtures"
+    for source in ("oura_raw", "ow_normalized"):
+        for fixture in (FIXTURES / source).glob("*_input.json"):
+            data_type = fixture.stem.replace("_input", "")
+            sample = json.loads(fixture.read_text())
+            tz = UTC if data_type in ("step_count", "physical_activity",
+                                       "sleep_duration") else None
+            result = convert(source=source, data_type=data_type,
+                             sample=sample, tz=tz)
+            assert "header" in result, f"{source}/{data_type}: missing header"
+
+
+def test_header_validation_rejects_empty():
+    """An empty header must fail validation (missing required fields)."""
+    from omh_shim._validate import validate_output
+    with pytest.raises(ValidationError):
+        validate_output({}, HEADER_SCHEMA_ID)
+
+
+def test_validate_false_skips(monkeypatch):
+    """validate=False must skip both body AND header validation."""
+    from omh_shim import _validate
+    call_log = []
+    original = _validate.validate_output
+
+    def spy(*args, **kwargs):
+        call_log.append(args)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_validate, "validate_output", spy)
+    convert(source="ow_normalized", data_type="heart_rate",
+            sample={"timestamp": "2026-04-09T08:00:00Z",
+                    "type": "heart_rate", "value": 72},
+            validate=False)
+    assert len(call_log) == 0, "validate_output should not be called when validate=False"

@@ -7,6 +7,7 @@ from typing import Any
 
 from omh_shim import _dispatch, _schema_loader, _validate
 from omh_shim._helpers import build_header
+from omh_shim._schema_loader import HEADER_SCHEMA_ID
 from omh_shim.errors import ConversionError, ValidationError
 
 __all__ = ["convert", "ConversionError", "ValidationError", "SCHEMA_IDS"]
@@ -30,9 +31,12 @@ uses a ``local:`` namespace placeholder (OMH has no canonical HRV schema)."""
 _registered = {dt for (_, dt) in _dispatch.REGISTRY}
 if _registered != SCHEMA_IDS.keys():
     raise RuntimeError(f"REGISTRY/SCHEMA_IDS drift: {_registered ^ SCHEMA_IDS.keys()}")
-if set(SCHEMA_IDS.values()) != _schema_loader.known_ids():
+# SCHEMA_IDS values must be a subset of loader entries (not equality),
+# because the loader also serves non-body schemas like ieee:header:1.0
+# that don't correspond to a convert() data_type.
+if not set(SCHEMA_IDS.values()) <= _schema_loader.known_ids():
     raise RuntimeError(
-        f"SCHEMA_IDS/loader drift: {set(SCHEMA_IDS.values()) ^ _schema_loader.known_ids()}"
+        f"SCHEMA_IDS/loader drift: {set(SCHEMA_IDS.values()) - _schema_loader.known_ids()}"
     )
 del _registered
 
@@ -102,10 +106,10 @@ def convert(
     schema_id = SCHEMA_IDS[data_type]
     if validate:
         _validate.validate_output(body, schema_id)
-    return {
-        "header": build_header(
-            schema_id,
-            external_datasheets=_extract_datasheets(sample, source=source),
-        ),
-        "body": body,
-    }
+    header = build_header(
+        schema_id,
+        external_datasheets=_extract_datasheets(sample, source=source),
+    )
+    if validate:
+        _validate.validate_output(header, HEADER_SCHEMA_ID)
+    return {"header": header, "body": body}

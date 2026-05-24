@@ -9,7 +9,7 @@ ref resolution can be served from local files without network access.
 import importlib.resources
 import json
 from functools import lru_cache
-from typing import Any
+from typing import Any, NoReturn
 
 from jsonschema import Draft7Validator
 from referencing import Registry, Resource
@@ -28,19 +28,53 @@ def _validator(schema_id: str) -> Draft7Validator:
     return Draft7Validator(load_schema(schema_id), registry=_registry())
 
 
+class _NoNetwork:
+    """Retriever that raises instead of fetching unknown $ref URIs.
+
+    Mirrors JHE's pattern in jupyterhealth-exchange/core/utils.py:24-26.
+    """
+
+    def __call__(self, uri: str) -> NoReturn:
+        raise RuntimeError(f"Remote $ref blocked (not preloaded): {uri}")
+
+
 @lru_cache(maxsize=1)
 def _registry() -> Registry:
-    """Build a referencing.Registry that serves every vendored schema by filename."""
+    """Build a referencing.Registry that serves every vendored schema.
+
+    Each schema is registered under multiple URIs so $refs resolve regardless
+    of how they're written:
+    - bare filename (e.g. "header-1.0.json")
+    - canonical IEEE w3id URL (metadata/ + utility/ schemas)
+    - canonical OMH w3id URL (utility/ schemas, since OMH bodies $ref utility
+      schemas using various URI forms)
+
+    Mirrors JHE's referencing.Registry setup in core/utils.py.
+    """
+    ieee_base = "https://w3id.org/ieee/ieee-1752-schema/"
+    omh_base = "https://w3id.org/openmhealth/schemas/omh/"
+
     schemas_pkg = importlib.resources.files("omh_shim.schemas")
     resources = []
-    for entry in schemas_pkg.iterdir():
-        name = entry.name
-        if not name.endswith(".json"):
+    for subdir in ("metadata", "data", "utility"):
+        sub = schemas_pkg.joinpath(subdir)
+        if not sub.is_dir():
             continue
-        with entry.open("r", encoding="utf-8") as f:
-            doc = json.load(f)
-        resources.append((name, Resource.from_contents(doc, default_specification=DRAFT7)))
-    return Registry().with_resources(resources)
+        for entry in sub.iterdir():
+            name = entry.name
+            if not name.endswith(".json"):
+                continue
+            with entry.open("r", encoding="utf-8") as f:
+                doc = json.load(f)
+            res = Resource.from_contents(doc, default_specification=DRAFT7)
+            resources.append((name, res))
+            # Also register under the w3id permalinks so refs like
+            # "https://w3id.org/ieee/ieee-1752-schema/<name>" resolve.
+            if subdir in ("metadata", "utility"):
+                resources.append((ieee_base + name, res))
+            if subdir == "utility":
+                resources.append((omh_base + name, res))
+    return Registry(retrieve=_NoNetwork()).with_resources(resources)  # type: ignore[call-arg]
 
 
 def validate_output(output: dict[str, Any], schema_id: str) -> None:

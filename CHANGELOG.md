@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vendored the clinical OMH body schema `body-weight:3.0` plus its
+  `mass-unit-value` utility ref. Served via `known_ids()` / `load_schema()` (no
+  converter), like the other clinical schemas; tracked by
+  `tools/refresh_schemas.py` and the offline `$ref`-closure test.
+
+## [1.1.0] — 2026-05-31
+
+### Added
+
 - `oura_raw.oxygen_saturation` converter — maps Oura's `daily_spo2`
   shape (`{day, spo2_percentage: {average}}`) to `omh:oxygen-saturation:2.0`.
   Both `oura_raw` and `ow_normalized` sources now support all 7 data types.

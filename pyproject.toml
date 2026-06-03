@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "omh-shim"
-version = "1.1.0"
+version = "1.2.0"
 description = "Convert wearable health data from vendor schemas to Open mHealth schemas"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -68,15 +68,15 @@ files = ["omh_shim", "tools"]
 strict = true
 ignore_missing_imports = true  # referencing, jsonschema have partial stubs
 
-# tbump is used to tag and publish releases
-# releases are published via the release.yaml workflow when
-# tags are pushed.
-# to release 1.1.0: `tbump 1.1.0`
+# The version above is bumped in the PR that opens a release (kept in sync with
+# omh_shim/__init__.py and [tool.tbump.version].current below). To cut a release,
+# move CHANGELOG's [Unreleased] entries to [X.Y.Z] and push the matching vX.Y.Z
+# tag — the release.yaml workflow builds and publishes to PyPI on the tag.
 [tool.tbump]
 github_url = "https://github.com/jupyterhealth/omh-shim"
 
 [tool.tbump.version]
-current = "1.1.0"
+current = "1.2.0"
 regex = '''
     (?P<major>\d+)
     \.

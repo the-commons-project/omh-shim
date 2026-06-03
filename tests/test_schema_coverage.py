@@ -32,6 +32,10 @@ SERVED_SAMPLES: dict[str, dict] = {
         "effective_time_frame": {"date_time": "2026-05-31T08:00:00Z"},
         "measurement_location": "oral",
     },
+    "omh:body-weight:3.0": {
+        "body_weight": {"value": 70.0, "unit": "kg"},
+        "effective_time_frame": {"date_time": "2026-05-31T08:00:00Z"},
+    },
     "omh:respiratory-rate:2.0": {
         "respiratory_rate": {"value": 16, "unit": "breaths/min"},
         "effective_time_frame": {"date_time": "2026-05-31T08:00:00Z"},
@@ -58,6 +62,7 @@ SERVED_NO_CONVERTER: frozenset[str] = frozenset({
     "omh_blood-glucose_4-0.json",
     "omh_blood-pressure_4-0.json",
     "omh_body-temperature_4-0.json",
+    "omh_body-weight_3-0.json",
     "omh_respiratory-rate_2-0.json",
     "omh_rr-interval_1-0.json",
 })

@@ -46,7 +46,9 @@ not just converters:
 - **MAJOR** — breaking changes (removing/renaming a schema id or public symbol,
   changing `convert()`'s contract).
 
-Feature PRs do **not** bump the version. To release, a maintainer moves the
-`## [Unreleased]` entries in `CHANGELOG.md` to a `## [X.Y.Z] — <date>` heading,
-then runs `tbump X.Y.Z` (bumps `pyproject.toml` + `omh_shim/__init__.py`, tags,
-and the release workflow publishes to PyPI on the tag).
+The version in `pyproject.toml` + `omh_shim/__init__.py` tracks the release being
+developed: the PR that opens a new release bumps it to the target `X.Y.Z` (keep
+`[tool.tbump.version] current` in sync). To publish, a maintainer moves the
+`## [Unreleased]` entries in `CHANGELOG.md` to a `## [X.Y.Z] — <date>` heading and
+pushes the `vX.Y.Z` tag — the release workflow builds and publishes to PyPI on
+the tag.

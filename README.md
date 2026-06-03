@@ -106,8 +106,8 @@ consumers should not assume OMH-standard interoperability for HRV records.
 ## Served schemas without a converter
 
 omh-shim also vendors clinical OMH body schemas — blood pressure, blood
-glucose, body temperature, respiratory rate, and RR interval — that have no
-`convert()` converter. They exist so consumers can **serve and validate** OMH
+glucose, body temperature, body weight, respiratory rate, and RR interval —
+that have no `convert()` converter. They exist so consumers can **serve and validate** OMH
 bodies offline from a single pinned source:
 
 ```python
@@ -120,6 +120,12 @@ schema = load_schema("omh:blood-glucose:4.0")  # vendored JSON schema, all $refs
 These are tracked as `SERVED_NO_CONVERTER` in `tests/test_schema_coverage.py`
 (the authoritative list) and refreshed alongside the converter schemas by
 `tools/refresh_schemas.py`.
+
+Note: the vendored `body-weight-3.0` schema carries an upstream `$id` typo
+(it self-references `body-weight-2.0.json`). It is kept verbatim to preserve
+byte-for-byte fidelity with the pinned source; validation resolves by
+registered URI rather than `$id`, so it is harmless. Tracked upstream at
+[openmhealth/schemas#38](https://github.com/openmhealth/schemas/issues/38).
 
 ## Adding a new source
 

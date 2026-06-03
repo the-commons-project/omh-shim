@@ -33,3 +33,22 @@ pytest                    # test suite
 `pre-commit` runs only the fast lint/hygiene hooks; `mypy` and `pytest` stay in
 CI. The vendored schemas under `omh_shim/schemas/` are byte-for-byte upstream
 copies managed by `tools/refresh_schemas.py` — don't hand-edit or reformat them.
+
+## Versioning & releases
+
+[SemVer](https://semver.org/), applied to the whole public surface — which
+includes the vendored schemas (consumers call `load_schema()` / `known_ids()`),
+not just converters:
+
+- **MINOR** — backwards-compatible additions: a newly served schema, a new
+  converter, or new public API.
+- **PATCH** — fixes with no new surface (e.g. re-vendoring a schema).
+- **MAJOR** — breaking changes (removing/renaming a schema id or public symbol,
+  changing `convert()`'s contract).
+
+The version in `pyproject.toml` + `omh_shim/__init__.py` tracks the release being
+developed: the PR that opens a new release bumps it to the target `X.Y.Z` (keep
+`[tool.tbump.version] current` in sync). To publish, a maintainer moves the
+`## [Unreleased]` entries in `CHANGELOG.md` to a `## [X.Y.Z] — <date>` heading and
+pushes the `vX.Y.Z` tag — the release workflow builds and publishes to PyPI on
+the tag.

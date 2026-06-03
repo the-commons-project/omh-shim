@@ -47,6 +47,7 @@ TARGETS: list[tuple[str, str]] = [
     ("data/omh_blood-glucose_4-0.json", "blood-glucose-4.0.json"),
     ("data/omh_blood-pressure_4-0.json", "blood-pressure-4.0.json"),
     ("data/omh_body-temperature_4-0.json", "body-temperature-4.0.json"),
+    ("data/omh_body-weight_3-0.json", "body-weight-3.0.json"),
     ("data/omh_respiratory-rate_2-0.json", "respiratory-rate-2.0.json"),
     ("data/omh_rr-interval_1-0.json", "rr-interval-1.0.json"),
 ]
@@ -62,6 +63,7 @@ OMH_UTILITY_TARGETS: list[tuple[str, str]] = [
     ("utility/diastolic-blood-pressure-1.x.json", "diastolic-blood-pressure-1.x.json"),
     ("utility/specimen-source-2.x.json", "specimen-source-2.x.json"),
     ("utility/temporal-relationship-to-meal-1.x.json", "temporal-relationship-to-meal-1.x.json"),
+    ("utility/mass-unit-value-1.x.json", "mass-unit-value-1.x.json"),
 ]
 
 # IEEE 1752.1 envelope schemas (metadata/). Pulled from opensource.ieee.org.

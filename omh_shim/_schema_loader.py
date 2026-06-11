@@ -23,6 +23,8 @@ _FILENAMES: dict[str, str] = {
     "omh:blood-pressure:4.0": "data/omh_blood-pressure_4-0.json",
     "omh:body-temperature:4.0": "data/omh_body-temperature_4-0.json",
     "omh:body-weight:3.0": "data/omh_body-weight_3-0.json",
+    "omh:forced-expiratory-volume-1-second:1.0": "data/omh_forced-expiratory-volume-1-second_1-0.json",
+    "omh:forced-vital-capacity:1.0": "data/omh_forced-vital-capacity_1-0.json",
     "omh:respiratory-rate:2.0": "data/omh_respiratory-rate_2-0.json",
     "omh:rr-interval:1.0": "data/omh_rr-interval_1-0.json",
     "ieee:header:1.0": "metadata/header-1.0.json",

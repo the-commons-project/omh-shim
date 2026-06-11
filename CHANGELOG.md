@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-06-11
+
 ### Added
 
 - Vendored the clinical OMH pulmonary schemas `forced-vital-capacity:1.0` and

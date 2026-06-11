@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Vendored the clinical OMH pulmonary schemas `forced-vital-capacity:1.0` and
+  `forced-expiratory-volume-1-second:1.0` plus their `volume-unit-value`
+  utility ref. Served via `known_ids()` / `load_schema()` (no converters),
+  like the other clinical schemas; tracked by `tools/refresh_schemas.py` and
+  the offline `$ref`-closure test.
+
+### Fixed
+
+- Refreshed vendored schemas to OMH ref `c64fca0`, picking up the upstream fix
+  for `body-weight-3.0`'s `$id` (previously self-referenced
+  `body-weight-2.0.json`); removed the README note documenting that typo.
+
 ## [1.2.0] — 2026-06-03
 
 ### Added

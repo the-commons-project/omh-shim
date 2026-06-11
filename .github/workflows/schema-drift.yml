@@ -56,9 +56,12 @@ jobs:
           # them — without this check they would land upstream silently.
           # Detection is best-effort (|| true): a compare-API hiccup must not
           # break the drift check itself.
+          # Note: the GitHub compare API caps the files array at 300 entries
+          # (https://docs.github.com/en/rest/commits/commits#compare-two-commits);
+          # a weekly diff of the OMH repo stays far below that in practice.
           NEW_OMH=""
           if [ "$PINNED_OMH" != "$UPSTREAM_OMH" ]; then
-            NEW_OMH=$(curl -fsSL "https://api.github.com/repos/openmhealth/schemas/compare/${PINNED_OMH}...${UPSTREAM_OMH}" | python -c "import sys,json; print('\n'.join(f['filename'].removeprefix('schema/omh/') for f in json.load(sys.stdin).get('files',[]) if f['status']=='added' and f['filename'].startswith('schema/omh/')))" || true)
+            NEW_OMH=$(curl -fsSL "https://api.github.com/repos/openmhealth/schemas/compare/${PINNED_OMH}...${UPSTREAM_OMH}" | python -c "import sys,json; print('\n'.join(f['filename'].removeprefix('schema/omh/') for f in json.load(sys.stdin).get('files',[]) if f['status']=='added' and f['filename'].startswith('schema/omh/') and f['filename'].endswith('.json')))" || true)
           fi
           NEW_IEEE=""
           if [ "$PINNED_IEEE" != "$UPSTREAM_IEEE" ]; then

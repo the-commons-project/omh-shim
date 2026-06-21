@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-06-21
+
+### Added
+
+- Vendored the IEEE 1752 body schema `ieee:sleep-stage-summary:1.0` (and its
+  IEEE utility refs `percent-unit-value-1.0` and
+  `descriptive-statistic-denominator-1.0`) — the first `ieee:`-namespaced body
+  schema served. Like the other clinical bodies it is served via `known_ids()` /
+  `load_schema()` with no converter; tracked by `tools/refresh_schemas.py` and
+  the offline `$ref`-closure test.
+
 ## [1.3.0] — 2026-06-11
 
 ### Added

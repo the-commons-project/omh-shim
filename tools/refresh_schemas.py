@@ -91,6 +91,21 @@ IEEE_UTILITY_TARGETS: list[tuple[str, str]] = [
     ("utility/time-interval-1.0.json", "utility/time-interval-1.0.json"),
     ("utility/temperature-unit-value-1.0.json", "utility/temperature-unit-value-1.0.json"),
     ("utility/body-posture-1.0.json", "utility/body-posture-1.0.json"),
+    # IEEE utility refs transitively required by the sleep-stage-summary body.
+    # NB: descriptive-statistic-1.0.json is intentionally NOT tracked here — the
+    # vendored copy under that bare filename is the OMH (draft-04) variant that
+    # OMH bodies depend on, and the flat bare-filename registry can hold only one
+    # schema per filename. sleep-stage-summary's relative ref to it resolves to
+    # that existing file; tracking the IEEE variant would overwrite and break OMH.
+    ("utility/percent-unit-value-1.0.json", "utility/percent-unit-value-1.0.json"),
+    ("utility/descriptive-statistic-denominator-1.0.json", "utility/descriptive-statistic-denominator-1.0.json"),
+]
+
+# IEEE 1752 body schemas served downstream (e.g. seeded as JHE CodeableConcepts)
+# with no omh-shim converter. Pulled from opensource.ieee.org/omh/1752.
+IEEE_DATA_TARGETS: list[tuple[str, str]] = [
+    # (vendored path under SCHEMAS_DIR, upstream path under schemas/)
+    ("data/ieee_sleep-stage-summary_1-0.json", "sleep/sleep-stage-summary-1.0.json"),
 ]
 
 
@@ -233,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     print()
 
     ieee_diffs = _check_targets(
-        IEEE_METADATA_TARGETS + IEEE_UTILITY_TARGETS,
+        IEEE_METADATA_TARGETS + IEEE_UTILITY_TARGETS + IEEE_DATA_TARGETS,
         lambda ref, upstream: f"{IEEE_RAW_BASE}/{ref}/schemas/{upstream}",
         ieee_ref,
     )

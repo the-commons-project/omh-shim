@@ -1,0 +1,163 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://w3id.org/ieee/ieee-1752-schema/sleep-stage-summary.json",
+    "title": "Summary of Sleep Stages",
+    "description": "This schema represents the varying sleep stages and wakefulness within an entire sleep episode",
+    "type": "object",
+    "definitions": {
+        "duration_unit_value": {
+            "$ref": "duration-unit-value-1.0.json"
+        },
+        "percent_unit_value": {
+            "$ref": "percent-unit-value-1.0.json"
+        },
+        "time_frame": {
+            "$ref": "time-frame-1.0.json"
+        },
+        "time_interval": {
+            "$ref": "time-interval-1.0.json"
+        },
+        "descriptive_statistic": {
+            "$ref": "descriptive-statistic-1.0.json"
+        },
+        "descriptive_statistic_denominator": {
+            "$ref": "descriptive-statistic-denominator-1.0.json"
+        }
+    },
+    "properties": {
+        "sleep_stage_summary": {
+            "description": "A summary of durations, percentages, episode counts related to sleep stages and wakefulness during an entire sleep episode.",
+            "type": "object",
+            "properties": {
+                "total_sleep_time": {
+                    "description": "The total amount of time spent asleep within the effective time frame.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "sleep_efficiency_percentage": {
+                    "description": "The amount of time spent asleep as a percentage of the sleep episode bounded by the effective time frame.",
+                    "$ref": "#/definitions/percent_unit_value"
+                },
+                "latency_to_sleep_onset": {
+                    "description": "Amount of time between when person starts to want to go to sleep and sleep onset.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "latency_to_arising": {
+                    "description": "Amount of time between final awakening and when person stops wanting to go to sleep.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "rem_sleep_duration": {
+                    "description": "Total time in REM Sleep Stage from bedtime until final awakening time or across the 24-h period. This excludes any time that a person is awake after first falling asleep at the beginning of the sleep episode and any other sleep stage durations.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "rem_sleep_episode_count": {
+                    "type": "integer"
+                },
+                "rem_sleep_percentage": {
+                    "$ref": "#/definitions/percent_unit_value"
+                },
+                "light_sleep_duration": {
+                    "description": "Total time in Light Sleep Stage from bedtime until final awakening time or across the 24-h period. This excludes any time that a person is awake after first falling asleep at the beginning of the sleep episode and any other sleep stage durations.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "light_sleep_episode_count": {
+                    "type": "integer"
+                },
+                "light_sleep_percentage": {
+                    "$ref": "#/definitions/percent_unit_value"
+                },
+                "deep_sleep_duration": {
+                    "description": "Total time in Deep Sleep Stage from bedtime until final awakening time or across the 24-h period. This excludes any time that a person is awake after first falling asleep at the beginning of the sleep episode and any other sleep stage durations.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "deep_sleep_episode_count": {
+                    "type": "integer"
+                },
+                "deep_sleep_percentage": {
+                    "$ref": "#/definitions/percent_unit_value"
+                },
+                "awake_duration": {
+                    "description": "Total time in Awake Stage from bedtime until final awakening time or across the 24-h period. This excludes any time that a person is awake after first falling asleep at the beginning of the sleep episode and any other sleep stage durations.",
+                    "$ref": "#/definitions/duration_unit_value"
+                },
+                "number_of_awakenings": {
+                    "type": "integer"
+                },
+                "awake_percentage": {
+                    "$ref": "#/definitions/percent_unit_value"
+                },
+                "descriptive_statistic": {
+                    "$ref": "#/definitions/descriptive_statistic"
+                },
+                "descriptive_statistic_denominator": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/descriptive_statistic_denominator"
+                        },
+                        {
+                            "description": "If the value needed is a standard unit of duration, select from the duration-unit-value value set.",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "total_sleep_time"
+            ]
+        },
+        "sleep_stage_episodes": {
+            "description": "Individual sleep stage episodes and their durations to describe at what points throughout the entire sleep episode is the individual is asleep, and when summarized while excluding awakening states equals the total_sleep_time.",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sleep_stage_state": {
+                        "type": "string",
+                        "enum": [
+                            "REM_sleep",
+                            "Light_sleep",
+                            "Deep_sleep",
+                            "Unknown_sleep",
+                            "Awake"
+                        ]
+                    },
+                    "sleep_stage_time_frame": {
+                        "allOf": [
+                            {
+                                "$ref": "#/definitions/time_frame"
+                            },
+                            {
+                                "required": [
+                                    "time_interval"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "sleep_stage_state",
+                    "sleep_stage_time_frame"
+                ]
+            }
+        },
+        "effective_time_frame": {
+            "description": "The date-time at which, or time interval during which the measurement is asserted as being valid.",
+            "allOf": [
+                {
+                    "$ref": "#/definitions/time_frame"
+                },
+                {
+                    "required": [
+                        "time_interval"
+                    ]
+                }
+            ]
+        },
+        "is_main_sleep": {
+            "type": "boolean"
+        }
+    },
+    "required": [
+        "sleep_stage_summary",
+        "effective_time_frame"
+    ]
+}

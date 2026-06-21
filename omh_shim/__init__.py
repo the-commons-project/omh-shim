@@ -19,7 +19,7 @@ __all__ = [
     "known_ids",
     "load_schema",
 ]
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "heart_rate": "omh:heart-rate:2.0",

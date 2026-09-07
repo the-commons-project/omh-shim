@@ -148,11 +148,41 @@ jobs:
           # the whole check dies.
           cat adoption_err.txt
 
+          # Computed on BOTH paths and before the early exit: a source that did not run has to
+          # reach the tracking issue, not just this step's summary. A green weekly job with a
+          # warning nobody opens is how the IEEE WAF block went unnoticed on 2026-08-31 and
+          # 2026-09-07. Silence must not look like success.
+          NOT_EVALUATED=$(python -c "
+          import json
+          labels = {'omh': 'Open mHealth deprecations', 'ieee': 'IEEE 1752.1 publication'}
+          try:
+              report = json.load(open('adoption_findings.json'))
+          except Exception as e:
+              print(f'- ⚠️ **Both sources NOT evaluated**: check_schema_adoption.py produced no usable report ({e})')
+          else:
+              for key, label in labels.items():
+                  source = report.get(key) or {}
+                  if not source.get('ran'):
+                      print(f\"- ⚠️ **{label} NOT evaluated** (ref \`{source.get('ref', '?')}\`): \"
+                            f\"{source.get('error') or 'no status reported'}\")
+          ")
+
+          echo "not_evaluated<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOT_EVALUATED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          # A separate boolean, because a heredoc output's emptiness is ambiguous to compare against.
+          if [ -n "$NOT_EVALUATED" ]; then
+            echo "has_not_evaluated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_not_evaluated=false" >> "$GITHUB_OUTPUT"
+          fi
+
           if [ "$STATUS" -ne 0 ]; then
             echo "::warning::check_schema_adoption.py failed to run (exit $STATUS) — NEITHER upstream source was evaluated this run"
             {
               echo "## Schema adoption check"
               echo "Neither source could be checked this week — see the job warnings above. This is NOT the same as \"no findings\"."
+              echo "$NOT_EVALUATED"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "ran_ok=false" >> "$GITHUB_OUTPUT"
             echo "has_findings=false" >> "$GITHUB_OUTPUT"
@@ -160,19 +190,13 @@ jobs:
           fi
           echo "ran_ok=true" >> "$GITHUB_OUTPUT"
 
-          # The tool reports each source's status separately: a source that did not run is
-          # named here as NOT evaluated, never folded into "no findings".
+          # Findings only; the NOT-evaluated lines are prepended from $NOT_EVALUATED above.
           FINDINGS_BODY=$(python -c "
           import json
           report = json.load(open('adoption_findings.json'))
           findings = report['findings']
           labels = {'omh': 'Open mHealth deprecations', 'ieee': 'IEEE 1752.1 publication'}
-          skipped = []
-          for key, label in labels.items():
-              source = report[key]
-              if not source['ran']:
-                  skipped.append(key)
-                  print(f\"- ⚠️ **{label} NOT evaluated** (ref \`{source['ref']}\`): {source['error']}\")
+          skipped = [k for k in labels if not report[k]['ran']]
           for f in findings:
               if f['kind'] == 'DEPRECATED':
                   when = f\" on {f['deprecation_date']}\" if f['deprecation_date'] else ''
@@ -189,6 +213,7 @@ jobs:
 
           {
             echo "## Schema adoption check"
+            if [ -n "$NOT_EVALUATED" ]; then echo "$NOT_EVALUATED"; fi
             echo "$FINDINGS_BODY"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -292,7 +317,7 @@ jobs:
       - name: Open or update issue for schema-drift findings
         # always() — a drift-step failure (not just its early exit) must not swallow adoption
         # findings the way NEW BREAKAGE 2 flagged; without it this step defaults to success().
-        if: always() && (steps.drift.outputs.has_new == 'true' || steps.adoption.outputs.has_findings == 'true')
+        if: always() && (steps.drift.outputs.has_new == 'true' || steps.adoption.outputs.has_findings == 'true' || steps.adoption.outputs.has_not_evaluated == 'true')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PINNED_OMH: ${{ steps.drift.outputs.pinned_omh }}
@@ -300,6 +325,7 @@ jobs:
           NEW_SCHEMAS: ${{ steps.drift.outputs.new_schemas }}
           HAS_ADOPTION_FINDINGS: ${{ steps.adoption.outputs.has_findings }}
           ADOPTION_FINDINGS: ${{ steps.adoption.outputs.findings_body }}
+          NOT_EVALUATED: ${{ steps.adoption.outputs.not_evaluated }}
         run: |
           TITLE="chore(schemas): schema-drift tracking (new upstream schemas / schema adoption)"
           BODY="The weekly drift check found items that need a human decision (pinned refs: OMH \`${PINNED_OMH}\`, IEEE \`${PINNED_IEEE}\`)."
@@ -327,6 +353,21 @@ jobs:
           4. CHANGELOG entry + MINOR version bump
 
           If a schema is deliberately not vendored, note that here and close."
+          fi
+
+          if [ -n "$NOT_EVALUATED" ]; then
+            BODY="$BODY
+
+          ### ⚠️ NOT evaluated this week
+
+          One or both upstream sources could not be checked, so this week's result is
+          **not** an all-clear for them:
+
+          ${NOT_EVALUATED}
+
+          This is actionable: it is usually the IEEE WAF rejecting the User-Agent, a bad
+          ref, or a \`raw.githubusercontent.com\` rate limit. Until it is fixed, an upstream
+          deprecation or a new IEEE measure can land unnoticed."
           fi
 
           if [ "$HAS_ADOPTION_FINDINGS" = "true" ]; then

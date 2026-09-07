@@ -18,7 +18,8 @@ Run from the repo root::
 
 Exit 0 whether or not findings were reported — findings are informational, not a
 build failure. Exit non-zero only when the check itself could not run (a network
-failure or an unparseable IEEE response).
+failure, an unparseable IEEE response, or a fetch that fails the canary sanity
+check below).
 
 Standard library only — no extra deps.
 """
@@ -40,6 +41,8 @@ from omh_shim import SCHEMA_IDS  # noqa: E402
 
 IEEE_API_BASE = "https://opensource.ieee.org/api/v4"
 DEFAULT_PROJECT = "omh%2F1752"
+DEFAULT_PATH = "schemas"
+MAX_PAGES = 50  # a well-behaved API pages in single digits; this only guards against one that ignores ?page=
 
 _MEASURE_RE = re.compile(r"^(?P<name>.+)-(?P<ver>\d+\.\d+)\.json$")
 
@@ -53,12 +56,21 @@ class Finding(NamedTuple):
 
 
 def _parse_version(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in version.split("."))
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError as e:
+        raise RuntimeError(f"unparseable version segment in {version!r}: {e}") from e
 
 
-def build_measure_index(paths: list[str]) -> dict[str, set[str]]:
-    """Measure name -> versions, from schemas/**.json paths. Skips metadata/ and utility/."""
+def build_measure_index(paths: list[str]) -> tuple[dict[str, set[str]], list[str]]:
+    """Measure name -> versions, from schemas/**.json paths. Skips metadata/ and utility/.
+
+    Also returns the basenames the version regex didn't match, so a naming scheme it
+    doesn't anticipate (e.g. a three-segment version, or a non-numeric one) becomes a
+    visible warning instead of a silently dropped measure.
+    """
     index: dict[str, set[str]] = {}
+    unparsed: list[str] = []
     for path in paths:
         rel = path.removeprefix("schemas/")
         if rel.startswith(("metadata/", "utility/")):
@@ -66,9 +78,22 @@ def build_measure_index(paths: list[str]) -> dict[str, set[str]]:
         basename = rel.rsplit("/", 1)[-1]
         match = _MEASURE_RE.match(basename)
         if not match:
+            unparsed.append(basename)
             continue
         index.setdefault(match.group("name"), set()).add(match.group("ver"))
-    return index
+    return index, unparsed
+
+
+def missing_canaries(index: Mapping[str, set[str]], schema_ids: Mapping[str, str]) -> list[str]:
+    """Canary measures already resolved to an ``ieee:`` id that are absent from ``index``.
+
+    Every such data type was vendored from this exact IEEE project+ref (see
+    ``tools/refresh_schemas.py``'s ``IEEE_DATA_TARGETS``), so its absence means the
+    fetch or the ``schemas/`` path is wrong — not that IEEE deleted a published
+    measure. A non-empty result means the index cannot be trusted. Pure, no network.
+    """
+    canaries = {dt.replace("_", "-") for dt, current in schema_ids.items() if current.startswith("ieee:")}
+    return sorted(m for m in canaries if m not in index)
 
 
 def find_findings(index: Mapping[str, set[str]], schema_ids: Mapping[str, str]) -> list[Finding]:
@@ -90,14 +115,19 @@ def find_findings(index: Mapping[str, set[str]], schema_ids: Mapping[str, str]) 
     return findings
 
 
-def fetch_schema_paths(project: str, ref: str) -> list[str]:
-    """Page the GitLab tree API for every schemas/**.json blob path at ref."""
+def fetch_schema_paths(project: str, ref: str, *, path: str = DEFAULT_PATH) -> list[str]:
+    """Page the GitLab tree API for every ``{path}/**.json`` blob path at ref."""
     paths: list[str] = []
     page = 1
     while True:
+        if page > MAX_PAGES:
+            raise RuntimeError(
+                f"exceeded {MAX_PAGES} pages fetching the '{path}' tree for {project}@{ref} "
+                f"— the API may not be honoring '?page='"
+            )
         url = (
             f"{IEEE_API_BASE}/projects/{project}/repository/tree"
-            f"?ref={ref}&path=schemas&recursive=true&per_page=100&page={page}"
+            f"?ref={ref}&path={path}&recursive=true&per_page=100&page={page}"
         )
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
@@ -120,12 +150,14 @@ def fetch_schema_paths(project: str, ref: str) -> list[str]:
     return paths
 
 
-def _print_table(findings: list[Finding], index: Mapping[str, set[str]]) -> None:
+def _print_table(
+    findings: list[Finding], index: Mapping[str, set[str]], schema_ids: Mapping[str, str]
+) -> None:
     findings_by_type = {f.data_type: f for f in findings}
     header = f"{'data_type':<20} {'resolved id':<28} {'ieee versions':<18} verdict"
     print(header)
     print("-" * len(header))
-    for data_type, current in sorted(SCHEMA_IDS.items()):
+    for data_type, current in sorted(schema_ids.items()):
         measure = data_type.replace("_", "-")
         versions = ", ".join(sorted(index.get(measure, set()), key=_parse_version)) or "-"
         finding = findings_by_type.get(data_type)
@@ -139,26 +171,58 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--project", default=DEFAULT_PROJECT, help="IEEE GitLab project id (URL-encoded).")
     parser.add_argument("--ref", help="IEEE ref to check. Defaults to the pinned ref in _pinned.json.")
+    parser.add_argument(
+        "--path", default=DEFAULT_PATH,
+        help=f"Tree path to fetch (default {DEFAULT_PATH!r}). For debugging path-drift only.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of a table.")
     args = parser.parse_args(argv)
 
     ref = args.ref or read_pinned(PINNED_PATH, family="ieee")
 
     try:
-        paths = fetch_schema_paths(args.project, ref)
+        paths = fetch_schema_paths(args.project, ref, path=args.path)
     except RuntimeError as e:
         print(f"::warning::check_ieee_adoption could not run: {e}", file=sys.stderr)
         return 1
 
-    index = build_measure_index(paths)
-    findings = find_findings(index, SCHEMA_IDS)
+    index, unparsed = build_measure_index(paths)
+
+    missing = missing_canaries(index, SCHEMA_IDS)
+    if missing or not index:
+        tree_url = (
+            f"{IEEE_API_BASE}/projects/{args.project}/repository/tree"
+            f"?ref={ref}&path={args.path}&recursive=true&per_page=100"
+        )
+        if not index:
+            reason = "the fetched index is completely empty"
+        else:
+            reason = f"canary measure(s) already vendored from this project+ref are missing: {missing}"
+        print(
+            f"::warning::check_ieee_adoption could not run: {reason} — "
+            f"the '{args.path}' path is likely wrong for {args.project}@{ref}. URL: {tree_url}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if unparsed:
+        print(
+            f"::warning::check_ieee_adoption: {len(unparsed)} schema filename(s) did not match "
+            f"the '<name>-<major>.<minor>.json' pattern and were skipped: {sorted(unparsed)}"
+        )
+
+    try:
+        findings = find_findings(index, SCHEMA_IDS)
+    except RuntimeError as e:
+        print(f"::warning::check_ieee_adoption could not run: {e}", file=sys.stderr)
+        return 1
 
     if args.json:
         print(json.dumps([f._asdict() for f in findings], indent=2))
     else:
         print(f"IEEE {args.project} @ {ref}")
         print()
-        _print_table(findings, index)
+        _print_table(findings, index, SCHEMA_IDS)
         print()
         if findings:
             print(f"{len(findings)} finding(s):")

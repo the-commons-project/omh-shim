@@ -130,11 +130,13 @@ jobs:
           echo "$CHANGED_FILES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      # No `if:` here — this must run every scheduled execution, including when the
-      # drift step above exits 0 early (no drift). Adoption findings are independent
-      # of ref movement, so an early exit in that step must not skip this one.
+      # if: always() — this must run every scheduled execution: when the drift step
+      # exits 0 early (no drift, an intentional early return) AND when it fails
+      # outright (an unintentional one). Adoption findings are independent of ref
+      # movement, so neither case may suppress this step.
       - name: Check IEEE adoption
         id: adoption
+        if: always()
         run: |
           set +e
           python tools/check_ieee_adoption.py --json > adoption_findings.json 2> adoption_err.txt

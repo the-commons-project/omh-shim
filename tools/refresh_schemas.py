@@ -34,6 +34,7 @@ RAW_BASE = "https://raw.githubusercontent.com/openmhealth/schemas"
 IEEE_RAW_BASE = "https://opensource.ieee.org/omh/1752/-/raw"
 # IEEE's WAF allowlists CLI-client UA prefixes; a bare tool name gets an HTML challenge.
 USER_AGENT = "curl/8.7.1 omh-shim-refresh/1.0"
+URLOPEN_TIMEOUT = 30  # seconds; a hung socket must not block until the job timeout
 
 # Top-level schemas to refresh.
 TARGETS: list[tuple[str, str]] = [
@@ -219,7 +220,7 @@ def _check_targets(
 def fetch(url: str, *, expect_json: bool = True) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=URLOPEN_TIMEOUT) as resp:
             text = str(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         sys.exit(f"HTTP {e.code} fetching {url}")

@@ -23,7 +23,8 @@ every commit. IEEE coverage is a plain dictionary lookup keyed by the *resolved 
 measure name — which under rule 3 can differ from the data type's (``sleep_duration``
 resolves to ``total-sleep-time``).
 
-Run from the repo root::
+Run from the repo root, against an editable install (``pip install -e .``) — the tool
+imports ``omh_shim`` to read the resolved schema ids and the vendored successor evidence::
 
     python tools/check_schema_adoption.py                  # check against the pinned IEEE ref
     python tools/check_schema_adoption.py --ref 1.0.3       # check a different IEEE ref
@@ -51,9 +52,16 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from refresh_schemas import PINNED_PATH, RAW_BASE, USER_AGENT, read_pinned  # noqa: E402
 
-# _successor_name is imported rather than reimplemented so the tool reads supersededBy
-# exactly as the resolver does.
-from omh_shim import SCHEMA_IDS, _successor_name, known_ids, load_schema  # noqa: E402
+IMPORT_ERROR = ""
+try:
+    # _successor_name is imported rather than reimplemented so the tool reads supersededBy
+    # exactly as the resolver does. This import runs omh-shim's resolution invariants, and
+    # the weekly job reaches it *after* refresh_schemas.py has rewritten the vendored tree:
+    # the week upstream deprecates a live candidate, the invariant is what fails here.
+    from omh_shim import SCHEMA_IDS, _successor_name, known_ids, load_schema  # noqa: E402
+except RuntimeError as e:
+    IMPORT_ERROR = str(e)
+    SCHEMA_IDS = {}
 
 IEEE_API_BASE = "https://opensource.ieee.org/api/v4"
 DEFAULT_PROJECT = "omh%2F1752"
@@ -76,12 +84,19 @@ class Finding(NamedTuple):
 
 
 class SourceResult(NamedTuple):
-    """One upstream source's outcome. ``ran`` false means the check learned nothing."""
+    """One upstream source's outcome.
+
+    ``ran`` false means the check learned nothing. ``ran`` true with a non-empty ``failed``
+    means it learned something about everything except those ids — a partial result, which
+    is not the same as a clean one.
+    """
 
     ran: bool
     error: str
     findings: list[Finding]
     data: Any
+    fetched: int = 0
+    failed: tuple[str, ...] = ()
 
 
 def _parse_version(version: str) -> tuple[int, ...]:
@@ -327,6 +342,9 @@ def run_omh_check(
 
     Fetching none of the ``omh:`` schemas is the same failure shape as the IEEE canary
     check — a rate limit or an outage would otherwise read as "nothing is deprecated".
+    A partial fetch still runs, but every id that could not be read is carried in
+    ``failed``: a permanent 404 after an upstream rename would otherwise leave that
+    schema's deprecation status unchecked every week, visible only on stderr.
     """
     omh_ids = sorted(schema_id for schema_id in known_ids() if schema_id.startswith("omh:"))
     schemas, failures = fetch_omh_schemas(omh_ids, ref)
@@ -343,8 +361,11 @@ def run_omh_check(
             f"check: {error}",
             file=sys.stderr,
         )
-        return SourceResult(False, error, [], {})
-    return SourceResult(True, "", find_deprecations(schemas, schema_ids, evidence), schemas)
+        return SourceResult(False, error, [], {}, 0, tuple(failures))
+    return SourceResult(
+        True, "", find_deprecations(schemas, schema_ids, evidence), schemas,
+        len(schemas), tuple(failures),
+    )
 
 
 def run_ieee_check(project: str, ref: str, path: str, schema_ids: Mapping[str, str]) -> SourceResult:
@@ -424,6 +445,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of a table.")
     args = parser.parse_args(argv)
 
+    if IMPORT_ERROR:
+        # ::error:: not ::warning::: this is a build-breaking state, not a flaky fetch.
+        print(
+            f"::error::check_schema_adoption cannot run: importing omh_shim failed because "
+            f"the resolver refused a candidate its publisher has deprecated. If this run "
+            f"refreshed the vendored schemas, upstream just deprecated a live candidate — "
+            f"point it at the successor it declares, in omh_shim/__init__.py's "
+            f"_SCHEMA_CANDIDATES. Invariant: {IMPORT_ERROR}",
+            file=sys.stderr,
+        )
+        return 1
+
     ieee_ref = args.ref or read_pinned(PINNED_PATH, family="ieee")
     evidence = successor_evidence()
 
@@ -435,7 +468,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         print(json.dumps({
-            "omh": {"ran": omh.ran, "error": omh.error, "ref": args.omh_ref},
+            "omh": {
+                "ran": omh.ran, "error": omh.error, "ref": args.omh_ref,
+                "fetched": omh.fetched, "failed": list(omh.failed),
+            },
             "ieee": {"ran": ieee.ran, "error": ieee.error, "ref": ieee_ref},
             "findings": [f._asdict() for f in findings],
         }, indent=2))
@@ -445,6 +481,12 @@ def main(argv: list[str] | None = None) -> int:
     print()
     if omh.ran:
         _print_deprecation_table(omh.data, SCHEMA_IDS, evidence)
+        if omh.failed:
+            print()
+            print(f"PARTIALLY evaluated: {len(omh.failed)} schema(s) could not be fetched and "
+                  f"were NOT checked for deprecation:")
+            for failure in omh.failed:
+                print(f"  {failure}")
     else:
         print(f"NOT evaluated: {omh.error}")
     print()

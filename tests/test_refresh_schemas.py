@@ -114,7 +114,7 @@ def test_fetch_rejects_non_json_response(monkeypatch):
             return False
 
     monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
-                        lambda req: _FakeResponse())
+                        lambda req, timeout=None: _FakeResponse())
     with pytest.raises(SystemExit, match="Non-JSON response"):
         refresh_schemas.fetch("https://example.invalid/schema.json")
 
@@ -130,7 +130,7 @@ def test_fetch_allows_non_json_when_expect_json_false(monkeypatch):
             return False
 
     monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
-                        lambda req: _FakeResponse())
+                        lambda req, timeout=None: _FakeResponse())
     result = refresh_schemas.fetch("https://example.invalid/unit-value-1.x.json",
                                    expect_json=False)
     assert result == "unit-value-1.1.json"
@@ -146,7 +146,7 @@ def test_fetch_returns_json_body(monkeypatch):
             return False
 
     monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
-                        lambda req: _FakeResponse())
+                        lambda req, timeout=None: _FakeResponse())
     assert refresh_schemas.fetch("https://example.invalid/x.json").startswith("{")
 
 

@@ -165,6 +165,14 @@ jobs:
                   if not source.get('ran'):
                       print(f\"- ⚠️ **{label} NOT evaluated** (ref \`{source.get('ref', '?')}\`): \"
                             f\"{source.get('error') or 'no status reported'}\")
+                  elif source.get('failed'):
+                      # A partial fetch is not a clean result: an upstream rename gives a
+                      # permanent 404, and that schema then goes unchecked every week.
+                      ids = ', '.join(f\"\`{f.split(' ', 1)[0].rstrip(':')}\`\" for f in source['failed'])
+                      print(f\"- ⚠️ **{label} PARTIALLY evaluated** (ref \`{source.get('ref', '?')}\`): \"
+                            f\"{source.get('fetched', '?')} schema(s) checked; NOT checked: {ids}\")
+                      for failure in source['failed']:
+                          print(f'  - {failure}')
           ")
 
           echo "not_evaluated<<EOF" >> "$GITHUB_OUTPUT"
@@ -196,7 +204,8 @@ jobs:
           report = json.load(open('adoption_findings.json'))
           findings = report['findings']
           labels = {'omh': 'Open mHealth deprecations', 'ieee': 'IEEE 1752.1 publication'}
-          skipped = [k for k in labels if not report[k]['ran']]
+          # A source with any per-schema failure is not a clean 'no findings' either.
+          skipped = [k for k in labels if not report[k]['ran'] or report[k].get('failed')]
           for f in findings:
               if f['kind'] == 'DEPRECATED':
                   when = f\" on {f['deprecation_date']}\" if f['deprecation_date'] else ''
@@ -275,7 +284,9 @@ jobs:
 
           1. Review the **Files changed** tab for breaking changes
           2. If CI is green, the change is additive — squash-merge
-          3. If CI is red, a converter needs updating to match the new schema
+          3. If CI is red, a converter needs updating to match the new schema, or the
+             resolver refused a newly-deprecated candidate (see the run log) — in which case
+             point it at the successor that schema declares, in \`_SCHEMA_CANDIDATES\`
 
           ### Upstream diffs
 
@@ -366,8 +377,9 @@ jobs:
           ${NOT_EVALUATED}
 
           This is actionable: it is usually the IEEE WAF rejecting the User-Agent, a bad
-          ref, or a \`raw.githubusercontent.com\` rate limit. Until it is fixed, an upstream
-          deprecation or a new IEEE measure can land unnoticed."
+          ref, a \`raw.githubusercontent.com\` rate limit or 404 after an upstream rename, or
+          the resolver refused a newly-deprecated candidate (see the run log). Until it is
+          fixed, an upstream deprecation or a new IEEE measure can land unnoticed."
           fi
 
           if [ "$HAS_ADOPTION_FINDINGS" = "true" ]; then

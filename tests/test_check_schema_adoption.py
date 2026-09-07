@@ -692,3 +692,80 @@ def test_main_json_reports_both_sources_down_and_exits_nonzero(monkeypatch, caps
     assert report["omh"]["ran"] is False
     assert report["ieee"]["ran"] is False
     assert report["findings"] == []
+
+
+# --- a partial OMH fetch is a partial result, not a clean one ---
+
+
+def test_run_omh_check_carries_the_ids_it_could_not_fetch(monkeypatch):
+    """1-of-14 failing still runs, but the unchecked id must not vanish into stderr:
+    an upstream rename gives a permanent 404 and that schema then goes unchecked forever."""
+    failure = "omh:rr-interval:1.0 from https://raw...: HTTPError: HTTP Error 404: Not Found"
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, [failure]),
+    )
+    result = check_schema_adoption.run_omh_check(
+        "main", SCHEMA_IDS, check_schema_adoption.successor_evidence()
+    )
+    assert result.ran is True
+    assert result.fetched == 1
+    assert result.failed == (failure,)
+
+
+def test_run_omh_check_reports_no_failures_on_a_complete_fetch(monkeypatch):
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, []),
+    )
+    result = check_schema_adoption.run_omh_check(
+        "main", SCHEMA_IDS, check_schema_adoption.successor_evidence()
+    )
+    assert result.failed == ()
+    assert result.fetched == 1
+
+
+def test_main_json_carries_the_partial_fetch_shape(monkeypatch, capsys):
+    failure = "omh:rr-interval:1.0 from https://raw...: HTTPError: HTTP Error 404: Not Found"
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", _ieee_paths)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, [failure]),
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2", "--json"]) == 0
+    omh = json.loads(capsys.readouterr().out)["omh"]
+    assert omh["ran"] is True
+    assert omh["fetched"] == 1
+    assert omh["failed"] == [failure]
+
+
+def test_main_table_names_a_partially_evaluated_source(monkeypatch, capsys):
+    failure = "omh:rr-interval:1.0 from https://raw...: HTTPError: HTTP Error 404: Not Found"
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", _ieee_paths)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, [failure]),
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2"]) == 0
+    out = capsys.readouterr().out
+    assert "PARTIALLY evaluated" in out
+    assert "omh:rr-interval:1.0" in out
+
+
+# --- the resolver refusing a newly-deprecated candidate must be diagnosed, not guessed at ---
+
+
+def test_main_reports_an_omh_shim_import_failure_as_an_error(monkeypatch, capsys):
+    """The weekly job runs this step after the refresh has rewritten the vendored tree, so
+    the rule-3 invariant can fire here — and 'the WAF blocked us' is the wrong diagnosis."""
+    invariant = (
+        "heart_rate: candidate 'omh:heart-rate:2.0' is deprecated by its publisher in "
+        "favor of '.../heart-rate.json' — omh-shim never emits a deprecated schema"
+    )
+    monkeypatch.setattr(check_schema_adoption, "IMPORT_ERROR", invariant)
+    assert check_schema_adoption.main(["--ref", "1.0.2"]) == 1
+    captured = capsys.readouterr()
+    assert "::error::" in captured.err
+    assert "_SCHEMA_CANDIDATES" in captured.err
+    assert invariant in captured.err
+    assert captured.out == ""

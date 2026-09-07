@@ -134,20 +134,20 @@ jobs:
       # exits 0 early (no drift, an intentional early return) AND when it fails
       # outright (an unintentional one). Adoption findings are independent of ref
       # movement, so neither case may suppress this step.
-      - name: Check IEEE adoption
+      - name: Check schema adoption
         id: adoption
         if: always()
         run: |
           set +e
-          python tools/check_ieee_adoption.py --json > adoption_findings.json 2> adoption_err.txt
+          python tools/check_schema_adoption.py --json > adoption_findings.json 2> adoption_err.txt
           STATUS=$?
           set -e
 
           if [ "$STATUS" -ne 0 ]; then
             cat adoption_err.txt
-            echo "::warning::check_ieee_adoption.py failed to run (exit $STATUS) — IEEE adoption findings NOT evaluated this run"
+            echo "::warning::check_schema_adoption.py failed to run (exit $STATUS) — schema adoption findings NOT evaluated this run"
             {
-              echo "## IEEE adoption check"
+              echo "## Schema adoption check"
               echo "The check failed to run this week — see the job warning above. This is NOT the same as \"no findings\"."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "ran_ok=false" >> "$GITHUB_OUTPUT"
@@ -160,16 +160,21 @@ jobs:
           import json
           findings = json.load(open('adoption_findings.json'))
           if not findings:
-              print('No findings. The candidate table is current with IEEE.')
+              print('No findings. The resolved schema ids are current with both publishers.')
           else:
               for f in findings:
+                  if f['kind'] == 'DEPRECATED':
+                      when = f\" on {f['deprecation_date']}\" if f['deprecation_date'] else ''
+                      print(f\"- **DEPRECATED** \`{f['current']}\`: Open mHealth deprecated it{when} \"
+                            f\"in favor of \`{f['superseded_by'] or 'an unnamed successor'}\`\")
+                      continue
                   verb = 'IEEE now publishes' if f['kind'] == 'ADOPT' else 'IEEE publishes a newer version of'
                   print(f\"- **{f['kind']}** \`{f['data_type']}\`: {verb} \`{f['measure']}\` \"
                         f\"({', '.join(f['versions'])}); currently resolved to \`{f['current']}\`\")
           ")
 
           {
-            echo "## IEEE adoption check"
+            echo "## Schema adoption check"
             echo "$FINDINGS_BODY"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -282,7 +287,7 @@ jobs:
           HAS_ADOPTION_FINDINGS: ${{ steps.adoption.outputs.has_findings }}
           ADOPTION_FINDINGS: ${{ steps.adoption.outputs.findings_body }}
         run: |
-          TITLE="chore(schemas): schema-drift tracking (new upstream schemas / IEEE adoption)"
+          TITLE="chore(schemas): schema-drift tracking (new upstream schemas / schema adoption)"
           BODY="The weekly drift check found items that need a human decision (pinned refs: OMH \`${PINNED_OMH}\`, IEEE \`${PINNED_IEEE}\`)."
 
           if [ -n "$NEW_SCHEMAS" ]; then
@@ -313,16 +318,24 @@ jobs:
           if [ "$HAS_ADOPTION_FINDINGS" = "true" ]; then
             BODY="$BODY
 
-          ### IEEE adoption findings
+          ### Schema adoption findings
 
-          \`tools/check_ieee_adoption.py\` found data types omh-shim could now
-          resolve to IEEE 1752.1, or upgrade to a newer published IEEE version:
+          \`tools/check_schema_adoption.py\` found an upstream Open mHealth
+          deprecation that omh-shim has not acted on, or a data type it could now
+          resolve to IEEE 1752.1 / upgrade to a newer published IEEE version:
 
           ${ADOPTION_FINDINGS}
 
-          To adopt, add the IEEE candidate id to \`_SCHEMA_CANDIDATES\` in
-          \`omh_shim/__init__.py\` — IEEE wins over OMH automatically once
-          vendored (see \`IEEE_DATA_TARGETS\` in \`tools/refresh_schemas.py\`)."
+          A **DEPRECATED** finding on a schema omh-shim resolves to is the urgent
+          one: the resolver refuses deprecated candidates at import, so the next
+          schema refresh will break the build until the candidate moves to the
+          declared successor. (Deprecations on served-only schemas whose successor
+          is already vendored are expected and are not reported.)
+
+          To adopt an IEEE schema, add the IEEE candidate id to
+          \`_SCHEMA_CANDIDATES\` in \`omh_shim/__init__.py\` — IEEE wins over OMH
+          automatically once vendored (see \`IEEE_DATA_TARGETS\` in
+          \`tools/refresh_schemas.py\`)."
           fi
 
           EXISTING=$(gh issue list --state open --label schema-drift --json number -q '.[0].number')

@@ -134,10 +134,15 @@ lands on `ieee:total-sleep-time:1.0`.
 
 ### Upgrading
 
-- `heart_rate`, `oxygen_saturation` and `blood_glucose` are unchanged and stay
-  on OMH, because IEEE 1752 defines no equivalent body. Every other type moved:
-  `physical_activity` and `sleep_episode` to their IEEE namesakes,
-  `sleep_duration` to `ieee:total-sleep-time:1.0`, and `step_count` is gone.
+- `heart_rate`, `oxygen_saturation` and `blood_glucose` keep their schema ids and
+  stay on OMH, because IEEE 1752 defines no equivalent body. Their **validation**
+  is not unchanged: the six OMH bodies that `$ref` IEEE's `descriptive-statistic`
+  by absolute URL — `blood-glucose:4.0` among them — now accept IEEE's full
+  17-value enum where 1.5.0 raised `ValidationError` on e.g.
+  `descriptive_statistic: "count"`. That is a widening, so nothing that validated
+  before stops validating; see Fixed. Every other type moved: `physical_activity`
+  and `sleep_episode` to their IEEE namesakes, `sleep_duration` to
+  `ieee:total-sleep-time:1.0`, and `step_count` is gone.
 - Observations already stored under `omh:physical-activity:1.2`,
   `omh:sleep-episode:1.1`, `omh:step-count:3.0` or `omh:sleep-duration:2.0` keep
   those codes. New records use the new ids — a historical split, not a

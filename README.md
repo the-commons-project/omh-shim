@@ -137,7 +137,10 @@ schema = load_schema("omh:blood-pressure:4.0")  # vendored JSON schema, all $ref
 
 These are tracked as `SERVED_NO_CONVERTER` in `tests/test_schema_coverage.py`
 (the authoritative list) and refreshed alongside the converter schemas by
-`tools/refresh_schemas.py`.
+`tools/refresh_schemas.py`. `tools/check_schema_adoption.py` watches the same two
+publishers for changes that would invalidate a resolved id — an Open mHealth
+deprecation, or an IEEE measure omh-shim could now adopt. Both tools need an
+editable install (`pip install -e .`) and run from the repo root.
 
 ## Adding a new source
 

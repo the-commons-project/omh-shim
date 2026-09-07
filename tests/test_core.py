@@ -570,6 +570,7 @@ def test_step_count_data_type_removed():
 def test_physical_activity_folds_steps(source, sample):
     body = convert(source=source, data_type="physical_activity", sample=sample, tz=UTC)["body"]
     assert body["base_movement_quantity"] == {"value": 8432, "unit": "steps"}
+    assert "step_count" not in body
 
 
 def test_sleep_duration_emits_ieee_field_name():

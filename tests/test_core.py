@@ -465,6 +465,20 @@ def test_resolver_rejects_unresolvable_type():
         _resolve("heart_rate", ("ieee:heart-rate:1.0",))
 
 
+def test_resolver_rejects_malformed_candidate():
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="malformed"):
+        _resolve("sleep_episode", ("ieee:sleep-episode",))
+
+
+def test_resolver_rejects_duplicate_namespace():
+    """Two candidates in one namespace would tie, and the tie breaks lexicographically —
+    silently preferring the lower version."""
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="more than once"):
+        _resolve("sleep_episode", ("ieee:sleep-episode:2.0", "ieee:sleep-episode:1.0"))
+
+
 # --- IEEE sleep-episode field naming ---
 
 

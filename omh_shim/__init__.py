@@ -43,14 +43,22 @@ def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
 
     Ranks candidates by ``_NAMESPACE_PRECEDENCE`` rather than trusting the
     order they were declared in, so a mis-typed table cannot silently emit the
-    wrong standard. Raises ``RuntimeError`` on an unknown namespace, a
-    candidate whose measure name doesn't match the data type, or a type with
-    no vendored candidate.
+    wrong standard. Raises ``RuntimeError`` on a malformed candidate id, an
+    unknown namespace, a candidate whose measure name doesn't match the data
+    type, more than one candidate in the same namespace, or a type with no
+    vendored candidate.
     """
     expected_name = data_type.replace("_", "-")
     ranked = []
+    seen_namespaces: set[str] = set()
     for candidate in candidates:
-        namespace, name, _version = candidate.split(":")
+        parts = candidate.split(":")
+        if len(parts) != 3:
+            raise RuntimeError(
+                f"{data_type}: malformed candidate {candidate!r} "
+                f"(expected 'namespace:name:version')"
+            )
+        namespace, name, _version = parts
         if namespace not in _NAMESPACE_PRECEDENCE:
             raise RuntimeError(
                 f"{data_type}: unknown namespace in {candidate!r} "
@@ -61,6 +69,12 @@ def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
                 f"{data_type}: candidate {candidate!r} has name {name!r}, "
                 f"expected {expected_name!r} — omh-shim does not infer equivalents"
             )
+        if namespace in seen_namespaces:
+            raise RuntimeError(
+                f"{data_type}: namespace {namespace!r} appears more than once in "
+                f"{list(candidates)} — one candidate per namespace keeps preference unambiguous"
+            )
+        seen_namespaces.add(namespace)
         ranked.append((_NAMESPACE_PRECEDENCE.index(namespace), candidate))
     vendored = _schema_loader.known_ids()
     for _rank, candidate in sorted(ranked):

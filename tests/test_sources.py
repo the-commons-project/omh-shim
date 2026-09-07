@@ -21,7 +21,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 DATA_TYPES = [
     "heart_rate",
     "oxygen_saturation",
-    "step_count",
     "sleep_duration",
     "sleep_episode",
     "physical_activity",
@@ -65,32 +64,6 @@ def test_oura_physical_activity_omits_optional_fields_when_absent():
     )
     assert "distance" not in result
     assert "kcal_burned" not in result
-
-
-def test_ow_step_count_accepts_timeseries_shape():
-    """TimeSeriesSample with type=steps — 1-minute interval ending at timestamp."""
-    sample = {
-        "timestamp": "2026-04-09T08:30:00+00:00",
-        "type": "steps",
-        "value": 12,
-        "unit": "steps",
-    }
-    result = convert(source="ow_normalized", data_type="step_count", sample=sample)
-    body = result["body"]
-    assert body["step_count"] == {"value": 12, "unit": "steps"}
-    interval = body["effective_time_frame"]["time_interval"]
-    assert interval["start_date_time"] == "2026-04-09T08:29:00Z"
-    assert interval["end_date_time"] == "2026-04-09T08:30:00Z"
-
-
-def test_ow_step_count_rejects_unknown_shape():
-    with pytest.raises(ConversionError):
-        convert(
-            source="ow_normalized",
-            data_type="step_count",
-            sample={"foo": "bar"},
-            tz=UTC,
-        )
 
 
 def test_oura_oxygen_saturation_rejects_missing_spo2_percentage():

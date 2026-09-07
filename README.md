@@ -32,7 +32,7 @@ omh_record = convert(
 )
 ```
 
-Daily data types (``step_count``, ``physical_activity``, ``sleep_duration``,
+Daily data types (``physical_activity``, ``sleep_duration``,
 ``oxygen_saturation``)
 aggregate over a calendar day, so they REQUIRE an explicit timezone so the day
 boundaries reflect the user's local day rather than silently assuming UTC:
@@ -44,7 +44,7 @@ from zoneinfo import ZoneInfo
 # UTC-anchored upstream data
 convert(
     source="oura_raw",
-    data_type="step_count",
+    data_type="physical_activity",
     sample={"day": "2026-04-09", "steps": 8432},
     tz=UTC,
 )
@@ -52,7 +52,7 @@ convert(
 # User's local timezone
 convert(
     source="oura_raw",
-    data_type="step_count",
+    data_type="physical_activity",
     sample={"day": "2026-04-09", "steps": 8432},
     tz=ZoneInfo("America/Los_Angeles"),
 )
@@ -95,12 +95,16 @@ fails schema validation.
 
 | `source` | `data_type` values |
 |---|---|
-| `oura_raw` | `heart_rate`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity` |
-| `ow_normalized` | `heart_rate`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity`, `blood_glucose` |
+| `oura_raw` | `heart_rate`, `oxygen_saturation`, `sleep_duration`, `sleep_episode`, `physical_activity` |
+| `ow_normalized` | `heart_rate`, `oxygen_saturation`, `sleep_duration`, `sleep_episode`, `physical_activity`, `blood_glucose` |
 
-Body schemas resolve IEEE 1752 first, Open mHealth second. omh-shim emits only
-schemas published by one of those two standards; where neither defines a
-measure (heart-rate variability, for example) it does not convert it.
+Body schemas resolve IEEE 1752 first, Open mHealth second, and omh-shim never
+emits a schema its publisher has deprecated — where a deprecated Open mHealth
+schema declares a successor, that successor is what resolves (`sleep_duration`
+emits `ieee:total-sleep-time:1.0`). omh-shim emits only schemas published by one
+of those two standards; where neither defines a measure (heart-rate variability,
+for example) it does not convert it. Steps are carried by `physical_activity` as
+`base_movement_quantity`; there is no separate `step_count` data type.
 
 ## Served schemas without a converter
 

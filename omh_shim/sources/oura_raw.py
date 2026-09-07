@@ -26,18 +26,10 @@ def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
     }
 
 
-def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
-    """Input: ``{"day": "2026-04-09", "steps": 8432, ...}``"""
-    return {
-        "step_count": unit_value(sample["steps"], "steps", cast=int),
-        "effective_time_frame": {"time_interval": day_interval(sample["day"], tz=tz)},
-    }
-
-
 def sleep_duration(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Input: Oura sleep/data[i] with ``total_sleep_duration`` in seconds."""
     return {
-        "sleep_duration": unit_value(sample["total_sleep_duration"], "sec", cast=int),
+        "total_sleep_time": unit_value(sample["total_sleep_duration"], "sec", cast=int),
         "effective_time_frame": {
             "time_interval": interval_from_bounds(sample["bedtime_start"], sample["bedtime_end"])
         },
@@ -71,6 +63,7 @@ def physical_activity(
     }
     set_optional(out, "distance", sample, "equivalent_walking_distance", unit="m")
     set_optional(out, "kcal_burned", sample, "active_calories", unit="kcal")
+    set_optional(out, "base_movement_quantity", sample, "steps", unit="steps", cast=int)
     return out
 
 

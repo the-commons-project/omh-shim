@@ -19,7 +19,7 @@ from omh_shim._schema_loader import load as load_schema
 from omh_shim.errors import ValidationError
 
 
-# maxsize is bounded to a small constant: there are currently 7 top-level
+# maxsize is bounded to a small constant: there are currently 6 top-level
 # schema ids (see omh_shim.SCHEMA_IDS). 16 leaves room for future types
 # without making the cache unbounded.
 @lru_cache(maxsize=16)
@@ -53,9 +53,11 @@ def _registry() -> Registry:
     collides with an Open mHealth one. They are registered under the IEEE w3id
     URL only, and last, so they override the generic registration there while
     the bare filename and the OMH w3id URL keep serving the OMH variant. This
-    is the split the two families' ``$id``s already imply: an OMH body carries
-    no ``$id``, so its relative ``$ref``s resolve to the bare filename, while
-    an IEEE body's ``$id`` re-bases its relative ``$ref``s onto the w3id URL.
+    is the split the two families' ``$id``s already imply: a legacy OMH body
+    carries no ``$id``, so its relative ``$ref``s resolve to the bare filename,
+    while a newer OMH body carries an OMH ``$id`` and ``$ref``s IEEE's utility
+    schemas by absolute URL, and an IEEE body's ``$id`` re-bases its relative
+    ``$ref``s onto the w3id URL.
 
     Mirrors JHE's referencing.Registry setup in core/utils.py.
     """

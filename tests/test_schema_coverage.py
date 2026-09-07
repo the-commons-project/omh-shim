@@ -75,16 +75,33 @@ SERVED_SAMPLES: dict[str, dict] = {
             },
         },
     },
+    "omh:step-count:3.0": {
+        "step_count": {"value": 100, "unit": "steps"},
+        "effective_time_frame": {
+            "time_interval": {
+                "start_date_time": "2026-05-31T08:00:00Z",
+                "end_date_time": "2026-05-31T09:00:00Z",
+            },
+        },
+    },
+    "omh:sleep-duration:2.0": {
+        "sleep_duration": {"value": 27600, "unit": "sec"},
+        "effective_time_frame": {
+            "time_interval": {
+                "start_date_time": "2026-05-31T23:00:00Z",
+                "end_date_time": "2026-06-01T07:00:00Z",
+            },
+        },
+    },
 }
 
 SCHEMA_STATUS: frozenset[str] = frozenset({
     "omh_blood-glucose_4-0.json",
     "omh_heart-rate_2-0.json",
     "omh_oxygen-saturation_2-0.json",
-    "omh_sleep-duration_2-0.json",
-    "omh_step-count_3-0.json",
     "ieee_physical-activity_1-0.json",
     "ieee_sleep-episode_1-0.json",
+    "ieee_total-sleep-time_1-0.json",
 })
 
 # Body schemas vendored so downstream consumers (e.g. the JHE MCP server) can
@@ -101,6 +118,8 @@ SERVED_NO_CONVERTER: frozenset[str] = frozenset({
     "ieee_sleep-stage-summary_1-0.json",
     "omh_physical-activity_1-2.json",
     "omh_sleep-episode_1-1.json",
+    "omh_step-count_3-0.json",
+    "omh_sleep-duration_2-0.json",
 })
 
 NOT_RELEVANT: frozenset[str] = frozenset()
@@ -270,15 +289,7 @@ OMH_DESCRIPTIVE_STATISTIC_URI = (
 )
 
 # omh:step-count:3.0 is the only OMH body that $refs descriptive-statistic by bare filename.
-STEP_COUNT_BODY: dict = {
-    "step_count": {"value": 100, "unit": "steps"},
-    "effective_time_frame": {
-        "time_interval": {
-            "start_date_time": "2026-05-31T08:00:00Z",
-            "end_date_time": "2026-05-31T09:00:00Z",
-        },
-    },
-}
+STEP_COUNT_BODY: dict = SERVED_SAMPLES["omh:step-count:3.0"]
 
 # These OMH bodies $ref descriptive-statistic by its absolute IEEE URL, not by filename.
 OMH_BODIES_REFERENCING_IEEE_URI: dict[str, dict] = {

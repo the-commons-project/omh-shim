@@ -108,6 +108,7 @@ IEEE_DATA_TARGETS: list[tuple[str, str]] = [
     ("data/ieee_sleep-stage-summary_1-0.json", "sleep/sleep-stage-summary-1.0.json"),
     ("data/ieee_physical-activity_1-0.json", "physical_activity/physical-activity-1.0.json"),
     ("data/ieee_sleep-episode_1-0.json", "sleep/sleep-episode-1.0.json"),
+    ("data/ieee_total-sleep-time_1-0.json", "sleep/total-sleep-time-1.0.json"),
 ]
 
 

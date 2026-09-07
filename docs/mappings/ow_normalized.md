@@ -29,46 +29,20 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## step_count → `omh:step-count:3.0`
-
-**OW shape:** Two supported input shapes.
-
-### Shape 1: `ActivitySummary` (preferred)
-
-| OW field | OMH field | Type | Notes |
-|---|---|---|---|
-| `steps` | `step_count.value` | int | unit: steps |
-| `date` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
-
-### Shape 2: `TimeSeriesSample` with `type=steps`
-
-| OW field | OMH field | Type | Notes |
-|---|---|---|---|
-| `value` | `step_count.value` | int | unit: steps |
-| `timestamp` | `effective_time_frame.time_interval` | 1-minute interval | end = timestamp, start = timestamp − 1 min |
-
-### Endpoint-specific handling
-
-- **OMH step-count:3.0 requires `time_interval`**, not `date_time`. This is why the TimeSeriesSample shape builds a 1-minute interval rather than using the timestamp directly — the OMH schema would reject `date_time` for this data type.
-- **Timezone required for ActivitySummary shape.** The `date` field is a bare `YYYY-MM-DD`; day bounds need an explicit timezone. The TimeSeriesSample shape does not need `tz` because the timestamp already has an offset.
-- **Unknown shapes rejected.** Samples that match neither shape raise `ConversionError`.
-
----
-
-## sleep_duration → `omh:sleep-duration:2.0`
+## sleep_duration → `ieee:total-sleep-time:1.0`
 
 **OW shape:** `ActivitySummary` (sleep fields)
 
 | OW field | OMH field | Type | Notes |
 |---|---|---|---|
-| `sleep_total_duration_minutes` | `sleep_duration.value` | int | Converted to seconds (×60). Scale applied before int cast to preserve fractional-minute precision. |
+| `sleep_total_duration_minutes` | `total_sleep_time.value` | int | Converted to seconds (×60). Scale applied before int cast to preserve fractional-minute precision. |
 | `date` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
 
 ### Not mapped
 
 | OW field | Reason |
 |---|---|
-| `sleep_time_in_bed_minutes` | OMH sleep-duration covers total sleep time, not time in bed |
+| `sleep_time_in_bed_minutes` | `ieee:total-sleep-time:1.0` covers total sleep time, not time in bed |
 
 ---
 
@@ -112,18 +86,18 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 | `date` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
 | `distance_meters` | `distance.value` | float | meters; optional |
 | `active_calories_kcal` | `kcal_burned.value` | float | kcal; optional |
+| `steps` | `base_movement_quantity.value` | int | unit: steps; optional |
 
 ### Endpoint-specific handling
 
 - **Timezone required.** Same as all daily types.
-- **Step count not included.** `ieee:physical-activity:1.0` has no step-count field; use the `step_count` converter.
+- **Steps live here.** `ieee:physical-activity:1.0` models step count as `base_movement_quantity` (unit `steps`), which is why OMH deprecated `step-count:3.0` in its favor. The OW per-minute step timeseries shape has no IEEE home and is no longer converted.
 - **Active minutes not modeled.** OW provides `active_minutes` but `ieee:physical-activity:1.0` has no directly equivalent field.
 
 ### Not mapped
 
 | OW field | Reason |
 |---|---|
-| `steps` | Mapped via `step_count` converter |
 | `active_minutes` | No OMH equivalent |
 | `source` | Device metadata, not health data |
 

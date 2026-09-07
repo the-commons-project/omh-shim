@@ -27,15 +27,35 @@ omh-shim emits standard schemas only, and converts nothing it cannot name."""
 
 _SCHEMA_CANDIDATES: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "heart_rate": ("omh:heart-rate:2.0",),
-    "step_count": ("omh:step-count:3.0",),
-    "sleep_duration": ("omh:sleep-duration:2.0",),
-    "sleep_episode": ("ieee:sleep-episode:1.0", "omh:sleep-episode:1.1"),
-    "physical_activity": ("ieee:physical-activity:1.0", "omh:physical-activity:1.2"),
+    "sleep_duration": ("ieee:total-sleep-time:1.0",),
+    "sleep_episode": ("ieee:sleep-episode:1.0",),
+    "physical_activity": ("ieee:physical-activity:1.0",),
     "oxygen_saturation": ("omh:oxygen-saturation:2.0",),
     "blood_glucose": ("omh:blood-glucose:4.0",),
 })
 """data_type -> candidate schema ids. A candidate must name the same measure as
-its data_type; IEEE 1752 wins over Open mHealth when both are vendored."""
+its data_type or the successor that measure's deprecated Open mHealth schema
+declares, and may not itself be deprecated; IEEE 1752 wins over Open mHealth
+when both are vendored."""
+
+
+def _successor_name(superseded_by: str) -> str:
+    """Measure name from a supersededBy value: a w3id URL or an ``ns:name:ver`` schema id."""
+    tail = superseded_by.rsplit("/", 1)[-1].removesuffix(".json")
+    return tail.split(":")[1] if ":" in tail else tail
+
+
+def _declared_successor(expected_name: str) -> str | None:
+    """Successor name the vendored deprecated ``omh:<expected_name>:*`` schema declares."""
+    for schema_id in _schema_loader.known_ids():
+        namespace, name, _version = schema_id.split(":")
+        if namespace != "omh" or name != expected_name:
+            continue
+        deprecation = _schema_loader.load(schema_id).get("deprecation")
+        if deprecation is None:
+            return None
+        return _successor_name(deprecation["supersededBy"])
+    return None
 
 
 def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
@@ -44,9 +64,10 @@ def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
     Ranks candidates by ``_NAMESPACE_PRECEDENCE`` rather than trusting the
     order they were declared in, so a mis-typed table cannot silently emit the
     wrong standard. Raises ``RuntimeError`` on a malformed candidate id, an
-    unknown namespace, a candidate whose measure name doesn't match the data
-    type, more than one candidate in the same namespace, or a type with no
-    vendored candidate.
+    unknown namespace, a vendored candidate its publisher has deprecated, a
+    candidate whose measure name neither matches the data type nor is the
+    successor that measure's Open mHealth schema declares, more than one
+    candidate in the same namespace, or a type with no vendored candidate.
     """
     expected_name = data_type.replace("_", "-")
     ranked = []
@@ -64,11 +85,27 @@ def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
                 f"{data_type}: unknown namespace in {candidate!r} "
                 f"(expected one of {_NAMESPACE_PRECEDENCE})"
             )
+        # Only a vendored candidate can be inspected; an unvendored one fails the closing check.
+        if candidate in _schema_loader.known_ids():
+            deprecation = _schema_loader.load(candidate).get("deprecation")
+            if deprecation is not None:
+                raise RuntimeError(
+                    f"{data_type}: candidate {candidate!r} is deprecated by its publisher "
+                    f"in favor of {deprecation.get('supersededBy')!r} — omh-shim never "
+                    f"emits a deprecated schema"
+                )
         if name != expected_name:
-            raise RuntimeError(
-                f"{data_type}: candidate {candidate!r} has name {name!r}, "
-                f"expected {expected_name!r} — omh-shim does not infer equivalents"
-            )
+            successor = _declared_successor(expected_name)
+            if successor is None:
+                raise RuntimeError(
+                    f"{data_type}: candidate {candidate!r} has name {name!r}, "
+                    f"expected {expected_name!r} — omh-shim does not infer equivalents"
+                )
+            if name != successor:
+                raise RuntimeError(
+                    f"{data_type}: candidate {candidate!r} has name {name!r}, but the "
+                    f"declared successor of {expected_name!r} is {successor!r}"
+                )
         if namespace in seen_namespaces:
             raise RuntimeError(
                 f"{data_type}: namespace {namespace!r} appears more than once in "
@@ -153,7 +190,7 @@ def convert(
     ``modality``, and ``external_datasheets`` (auto-populated from the sample's
     source metadata when available).
 
-    ``tz`` is required for daily data types (step_count, physical_activity,
+    ``tz`` is required for daily data types (physical_activity,
     sleep_duration, oxygen_saturation) — pass ``datetime.UTC`` or a ``ZoneInfo``.
 
     Raises ``ConversionError`` on invalid input, ``ValidationError`` on

@@ -20,35 +20,13 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## step_count → `omh:step-count:3.0`
-
-**Oura endpoint:** `/v2/usercollection/daily_activity`
-
-| Oura field | OMH field | Type | Notes |
-|---|---|---|---|
-| `steps` | `step_count.value` | int | unit: steps |
-| `day` | `effective_time_frame.time_interval` | day interval | Requires `tz` — see below |
-
-### Endpoint-specific handling
-
-- **Timezone required.** The `day` field is a bare `YYYY-MM-DD` date. The converter builds midnight-to-midnight bounds in the caller-provided timezone. Passing `tz=None` raises `ConversionError`. A "day" in Tokyo is not a "day" in UTC.
-
-### Not mapped (gaps)
-
-| Oura field | Reason |
-|---|---|
-| `score` | Oura-proprietary 1–100 score; no OMH equivalent |
-| `active_calories` | Mapped via `physical_activity` converter instead |
-
----
-
-## sleep_duration → `omh:sleep-duration:2.0`
+## sleep_duration → `ieee:total-sleep-time:1.0`
 
 **Oura endpoint:** `/v2/usercollection/sleep`
 
 | Oura field | OMH field | Type | Notes |
 |---|---|---|---|
-| `total_sleep_duration` | `sleep_duration.value` | int | Oura reports in seconds; no unit conversion needed |
+| `total_sleep_duration` | `total_sleep_time.value` | int | Oura reports in seconds; no unit conversion needed |
 | `bedtime_start` | `effective_time_frame.time_interval.start_date_time` | ISO-8601 | |
 | `bedtime_end` | `effective_time_frame.time_interval.end_date_time` | ISO-8601 | |
 
@@ -56,7 +34,7 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 | Oura field | Reason |
 |---|---|
-| `time_in_bed` | OMH sleep-duration schema covers total sleep time, not time in bed. Could map to IEEE `time-in-bed:1.0` in the future. |
+| `time_in_bed` | `ieee:total-sleep-time:1.0` covers total sleep time, not time in bed. Could map to IEEE `time-in-bed:1.0` in the future. |
 
 ---
 
@@ -105,18 +83,18 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 | `day` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
 | `equivalent_walking_distance` | `distance.value` | float | meters; optional |
 | `active_calories` | `kcal_burned.value` | float | kcal; optional |
+| `steps` | `base_movement_quantity.value` | int | unit: steps; optional |
 
 ### Endpoint-specific handling
 
-- **Timezone required.** Same as `step_count` — the `day` field needs explicit timezone for day bounds.
-- **Optional fields omitted when absent.** `distance` and `kcal_burned` are only set if the source field is present and non-None.
-- **Step count not included.** `ieee:physical-activity:1.0` has no field for step count. Steps go through the dedicated `step_count` converter.
+- **Timezone required.** The `day` field is a bare `YYYY-MM-DD` date, so the converter needs an explicit timezone for the day bounds. A "day" in Tokyo is not a "day" in UTC.
+- **Optional fields omitted when absent.** `distance`, `kcal_burned` and `base_movement_quantity` are only set if the source field is present and non-None.
+- **Steps live here.** `ieee:physical-activity:1.0` models step count as `base_movement_quantity` (unit `steps`), which is why OMH deprecated `step-count:3.0` in its favor.
 
 ### Not mapped (gaps)
 
 | Oura field | Reason |
 |---|---|
-| `steps` | Mapped via `step_count` converter, not `physical_activity` |
 | `low_activity_time` | dicristea maps to IEEE `physical-activity:1.0` duration fields. No OMH equivalent. |
 | `medium_activity_time` | Same |
 | `high_activity_time` | Same |
@@ -139,7 +117,7 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 ### Endpoint-specific handling
 
 - **Nested input.** Oura wraps the SpO2 value in `{"spo2_percentage": {"average": 96.5}}`. The converter raises `ConversionError` if `spo2_percentage` is missing, not a mapping, or lacks `average`.
-- **Timezone required.** Same as `step_count` / `physical_activity` — the `day` field needs explicit timezone for day bounds.
+- **Timezone required.** Same as `physical_activity` — the `day` field needs explicit timezone for day bounds.
 - **Daily aggregate.** Oura reports SpO2 as the nightly average from per-minute measurements during sleep. The shim represents this as a full calendar day interval.
 
 ### Not mapped (gaps)

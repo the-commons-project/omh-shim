@@ -11,12 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (BREAKING)
 
-- Body schemas now resolve **IEEE 1752 first, Open mHealth second**. `SCHEMA_IDS`
+- Body schemas now resolve **IEEE 1752 first, Open mHealth second**, and
+  **omh-shim never emits a schema its publisher has deprecated**. `SCHEMA_IDS`
   is derived from a candidate table ranked by namespace precedence rather than
-  hand-written, and import-time guards reject an unknown namespace, a candidate
-  that is not an exact name match for its data type, a malformed schema id,
-  more than one candidate per namespace, and any data type that resolves to no
-  vendored schema.
+  hand-written, and import-time guards reject a vendored candidate carrying a
+  `deprecation` block, an unknown namespace, a candidate whose measure name is
+  neither its data type's nor the successor that measure's Open mHealth schema
+  declares in `deprecation.supersededBy`, a malformed schema id, more than one
+  candidate per namespace, and any data type that resolves to no vendored
+  schema. Following a dated `supersededBy` pointer is the publisher's own
+  instruction, not inference — the successor name is read from the vendored
+  file at import, so nobody can declare a successor the publisher did not.
+- `sleep_duration` emits `ieee:total-sleep-time:1.0` (was
+  `omh:sleep-duration:2.0`, which OMH deprecated on 2020-05-05 in favor of
+  `omh:total-sleep-time:1.x`, itself since deprecated in favor of IEEE's
+  `total-sleep-time`). The body field is renamed `sleep_duration` ->
+  `total_sleep_time`; values and time frames are unchanged.
+- `physical_activity` now emits `base_movement_quantity` (unit `steps`) when the
+  source record carries a step count.
 - `physical_activity` emits `ieee:physical-activity:1.0` (was
   `omh:physical-activity:1.2`). No converter change — IEEE's `activity_name` is
   a free-form string and both required fields were already emitted.
@@ -29,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed (BREAKING)
 
+- `step_count` is no longer a supported data type. OMH deprecated
+  `omh:step-count:3.0` on 2022-12-01 in favor of `ieee:physical-activity:1.0`,
+  "which models also number of steps", so steps now ride on `physical_activity`
+  as `base_movement_quantity`. Both sources' `physical_activity` converters
+  already read the record that carries `steps` (Oura `daily_activity`, OW
+  `ActivitySummary`), so keeping `step_count` would have emitted two
+  physical-activity observations per day from one record. The `ow_normalized`
+  per-minute step timeseries shape has no IEEE home and is gone with it.
 - `heart_rate_variability` is no longer a supported data type, and the
   hand-written `local:heart-rate-variability:1.0` schema is deleted. Neither
   IEEE 1752 nor Open mHealth publishes an HRV body schema. omh-shim no longer
@@ -36,9 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Vendored `ieee:physical-activity:1.0` and `ieee:sleep-episode:1.0` at IEEE
-  ref 1.0.2, with physical-activity's `$ref` closure
-  (`length`/`kcal`/`speed-unit-value-1.0`).
+- Vendored `ieee:physical-activity:1.0`, `ieee:sleep-episode:1.0` and
+  `ieee:total-sleep-time:1.0` at IEEE ref 1.0.2, with physical-activity's
+  `$ref` closure (`length`/`kcal`/`speed-unit-value-1.0`).
+- `omh:step-count:3.0` and `omh:sleep-duration:2.0` stay vendored as served-only
+  schemas: they are the evidence the successor invariant reads, and downstream
+  consumers still validate historical records against them.
 - Vendored IEEE's `descriptive-statistic-1.0` under `schemas/utility/ieee/`,
   alongside the Open mHealth schema of the same filename.
 

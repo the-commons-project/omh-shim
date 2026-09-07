@@ -68,6 +68,7 @@ def test_main_warns_on_unparsed_filenames(monkeypatch, capsys):
         lambda project, ref, path=check_ieee_adoption.DEFAULT_PATH: [
             "schemas/physical_activity/physical-activity-1.0.json",
             "schemas/sleep/sleep-episode-1.0.json",
+            "schemas/sleep/total-sleep-time-1.0.json",
             "schemas/heart_rate/heart-rate-1.0.1.json",
         ],
     )
@@ -88,6 +89,7 @@ def test_main_json_stdout_stays_pure_json_when_filenames_are_unparsed(monkeypatc
         lambda project, ref, path=check_ieee_adoption.DEFAULT_PATH: [
             "schemas/physical_activity/physical-activity-1.0.json",
             "schemas/sleep/sleep-episode-1.0.json",
+            "schemas/sleep/total-sleep-time-1.0.json",
             "schemas/heart_rate/heart-rate-1.0.1.json",
         ],
     )
@@ -176,6 +178,7 @@ def test_main_routes_unparseable_version_through_warning_path(monkeypatch, capsy
         lambda project, ref, path=check_ieee_adoption.DEFAULT_PATH: [
             "schemas/physical_activity/physical-activity-1.0.json",
             "schemas/sleep/sleep-episode-1.0.json",
+            "schemas/sleep/total-sleep-time-1.0.json",
             "schemas/heart_rate/heart-rate-1.0.json",
         ],
     )
@@ -197,20 +200,26 @@ def test_find_findings_no_finding_for_unpublished_measure():
 
 
 def test_missing_canaries_empty_when_ieee_resolved_types_are_present():
-    index = {"physical-activity": {"1.0"}, "sleep-episode": {"1.0"}}
+    index = {"physical-activity": {"1.0"}, "sleep-episode": {"1.0"}, "total-sleep-time": {"1.0"}}
     assert check_ieee_adoption.missing_canaries(index, SCHEMA_IDS) == []
 
 
 def test_missing_canaries_flags_absent_ieee_resolved_measure():
     # sleep-episode is missing even though sleep_episode already resolves to ieee:sleep-episode:1.0.
-    index = {"physical-activity": {"1.0"}}
+    index = {"physical-activity": {"1.0"}, "total-sleep-time": {"1.0"}}
     assert check_ieee_adoption.missing_canaries(index, SCHEMA_IDS) == ["sleep-episode"]
 
 
 def test_missing_canaries_flags_all_when_index_is_empty():
     assert sorted(check_ieee_adoption.missing_canaries({}, SCHEMA_IDS)) == [
-        "physical-activity", "sleep-episode",
+        "physical-activity", "sleep-episode", "total-sleep-time",
     ]
+
+
+def test_missing_canaries_keys_on_resolved_measure_not_data_type():
+    """sleep_duration resolves to total-sleep-time; IEEE never published sleep-duration."""
+    index = {"physical-activity": {"1.0"}, "sleep-episode": {"1.0"}, "sleep-duration": {"1.0"}}
+    assert check_ieee_adoption.missing_canaries(index, SCHEMA_IDS) == ["total-sleep-time"]
 
 
 def test_main_errors_on_empty_index_instead_of_reporting_no_findings(monkeypatch, capsys):
@@ -325,6 +334,7 @@ def test_main_returns_zero_with_findings_and_reports_them(monkeypatch):
         lambda project, ref, path=check_ieee_adoption.DEFAULT_PATH: [
             "schemas/physical_activity/physical-activity-1.0.json",
             "schemas/sleep/sleep-episode-1.0.json",
+            "schemas/sleep/total-sleep-time-1.0.json",
             "schemas/heart_rate/heart-rate-1.0.json",
         ],
     )

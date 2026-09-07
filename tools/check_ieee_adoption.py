@@ -6,9 +6,10 @@ Scoped to stable IEEE 1752.1 (``omh/1752``) only — ``omh/1752-2``'s draft meta
 schemas live on an unmerged branch, and watching drafts would churn every commit.
 
 The check is mechanical, not a judgment call: ``omh_shim._SCHEMA_CANDIDATES`` is
-enforced at import to have each candidate's measure name equal
-``data_type.replace("_", "-")`` (the no-inference rule), so IEEE coverage is a plain
-dictionary lookup keyed by that same name.
+enforced at import to have each candidate's measure name equal the data type's or
+the successor its publisher declared, so IEEE coverage is a plain dictionary lookup
+keyed by the *resolved id's* measure name — which under rule 3 can differ from the
+data type's (``sleep_duration`` resolves to ``total-sleep-time``).
 
 Run from the repo root::
 
@@ -92,7 +93,7 @@ def missing_canaries(index: Mapping[str, set[str]], schema_ids: Mapping[str, str
     fetch or the ``schemas/`` path is wrong — not that IEEE deleted a published
     measure. A non-empty result means the index cannot be trusted. Pure, no network.
     """
-    canaries = {dt.replace("_", "-") for dt, current in schema_ids.items() if current.startswith("ieee:")}
+    canaries = {c.split(":")[1] for c in schema_ids.values() if c.startswith("ieee:")}
     return sorted(m for m in canaries if m not in index)
 
 
@@ -100,7 +101,7 @@ def find_findings(index: Mapping[str, set[str]], schema_ids: Mapping[str, str]) 
     """Pure. Returns ADOPT/NEWER findings; empty when the table is current."""
     findings: list[Finding] = []
     for data_type, current in schema_ids.items():
-        measure = data_type.replace("_", "-")
+        measure = current.split(":")[1]
         versions = index.get(measure)
         if not versions:
             continue
@@ -158,7 +159,7 @@ def _print_table(
     print(header)
     print("-" * len(header))
     for data_type, current in sorted(schema_ids.items()):
-        measure = data_type.replace("_", "-")
+        measure = current.split(":")[1]
         versions = ", ".join(sorted(index.get(measure, set()), key=_parse_version)) or "-"
         finding = findings_by_type.get(data_type)
         verdict = finding.kind if finding else "ok"

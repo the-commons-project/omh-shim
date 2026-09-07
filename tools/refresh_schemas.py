@@ -5,8 +5,7 @@ By default the script verifies the vendored body + utility (OMH) and
 envelope/utility (IEEE 1752.1) schemas against the refs recorded in
 ``omh_shim/schemas/_pinned.json``. Pass ``--omh-ref`` and/or ``--ieee-ref``
 to fetch a different ref for either source; when changes are confirmed, the
-pinned ref for any family passed explicitly is updated automatically. The
-local HRV placeholder is intentionally excluded.
+pinned ref for any family passed explicitly is updated automatically.
 
 Run from the repo root::
 
@@ -34,7 +33,7 @@ PINNED_PATH = SCHEMAS_DIR / "_pinned.json"
 RAW_BASE = "https://raw.githubusercontent.com/openmhealth/schemas"
 IEEE_RAW_BASE = "https://opensource.ieee.org/omh/1752/-/raw"
 
-# Top-level schemas to refresh. The local HRV placeholder is excluded.
+# Top-level schemas to refresh.
 TARGETS: list[tuple[str, str]] = [
     # (vendored filename, upstream path within schema/omh/)
     ("data/omh_heart-rate_2-0.json", "heart-rate-2.0.json"),

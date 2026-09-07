@@ -140,15 +140,12 @@ def test_daily_types_respect_non_utc_tz(source, data_type, sample):
 
 NAIVE_CASES = [
     ("oura_raw", "heart_rate", {"bpm": 72, "timestamp": "2026-04-09T08:30:00"}),
-    ("oura_raw", "heart_rate_variability", {"rmssd": 45.0, "timestamp": "2026-04-09T08:30:00"}),
     ("oura_raw", "sleep_duration", {"total_sleep_duration": 27000,
      "bedtime_start": "2026-04-09T22:00:00", "bedtime_end": "2026-04-10T06:00:00"}),
     ("oura_raw", "sleep_episode", {"bedtime_start": "2026-04-09T22:00:00",
      "bedtime_end": "2026-04-10T06:00:00"}),
     ("ow_normalized", "heart_rate", {"timestamp": "2026-04-09T08:30:00",
      "type": "heart_rate", "value": 72}),
-    ("ow_normalized", "heart_rate_variability", {"timestamp": "2026-04-09T08:30:00",
-     "type": "heart_rate_variability", "value": 45.0}),
     ("ow_normalized", "sleep_episode", {"bedtime_start": "2026-04-09T22:00:00",
      "bedtime_end": "2026-04-10T06:00:00"}),
     ("ow_normalized", "step_count", {"timestamp": "2026-04-09T08:30:00",
@@ -163,13 +160,6 @@ def test_rejects_naive_datetime(source, data_type, sample):
 
 
 # --- converters raise ConversionError directly (not raw KeyError) ---
-
-
-def test_oura_hrv_rejects_normalized_score_directly():
-    from omh_shim.sources import oura_raw
-    with pytest.raises(ConversionError, match="rmssd"):
-        oura_raw.heart_rate_variability(
-            {"day": "2026-04-09", "contributors": {"hrv_balance": 70}}, tz=None)
 
 
 def test_ow_step_count_rejects_unknown_shape_directly():
@@ -202,8 +192,20 @@ def test_all_schemas_load():
         assert isinstance(load(schema_id), dict)
 
 
-def test_hrv_schema_is_local_namespace():
-    assert SCHEMA_IDS["heart_rate_variability"].startswith("local:")
+def test_hrv_data_type_removed():
+    """Neither IEEE nor OMH defines HRV, so omh-shim does not convert it."""
+    assert "heart_rate_variability" not in SCHEMA_IDS
+    with pytest.raises(ConversionError, match="No converter"):
+        convert(
+            source="oura_raw", data_type="heart_rate_variability",
+            sample={"rmssd": 42.5, "timestamp": "2026-04-09T08:00:00Z"},
+        )
+
+
+def test_no_local_namespace_schemas():
+    """No hand-written schema may be served under any namespace."""
+    from omh_shim import known_ids
+    assert not [sid for sid in known_ids() if sid.startswith("local:")]
 
 
 # --- numeric precision ---
@@ -305,16 +307,6 @@ def test_header_external_datasheets_oura_raw_implicit_device():
     assert result["header"]["external_datasheets"] == [
         {"datasheet_type": "manufacturer", "datasheet_reference": "Oura Ring"},
     ]
-
-
-def test_header_local_schema_namespace():
-    """HRV uses the local: namespace — header.schema_id must reflect that."""
-    result = convert(
-        source="oura_raw", data_type="heart_rate_variability",
-        sample={"rmssd": 42.5, "timestamp": "2026-04-09T08:00:00Z"},
-    )
-    sid = result["header"]["schema_id"]
-    assert sid == {"namespace": "local", "name": "heart-rate-variability", "version": "1.0"}
 
 
 def test_validate_raises_on_remote_ref():

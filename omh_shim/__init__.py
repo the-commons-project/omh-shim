@@ -23,7 +23,6 @@ __version__ = "1.5.0"
 
 SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "heart_rate": "omh:heart-rate:2.0",
-    "heart_rate_variability": "local:heart-rate-variability:1.0",
     "step_count": "omh:step-count:3.0",
     "sleep_duration": "omh:sleep-duration:2.0",
     "sleep_episode": "omh:sleep-episode:1.1",
@@ -31,8 +30,7 @@ SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
     "oxygen_saturation": "omh:oxygen-saturation:2.0",
     "blood_glucose": "omh:blood-glucose:4.0",
 })
-"""Read-only mapping of data_type -> schema id. ``heart_rate_variability``
-uses a ``local:`` namespace placeholder (OMH has no canonical HRV schema)."""
+"""Read-only mapping of data_type -> schema id."""
 
 # Fail fast if someone adds a converter without a schema id (or vice versa),
 # or a schema id without a loader filename entry. Uses raise (not assert)

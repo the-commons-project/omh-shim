@@ -24,16 +24,6 @@ def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
     }
 
 
-def heart_rate_variability(
-    sample: Mapping[str, Any], *, tz: tzinfo | None
-) -> dict[str, Any]:
-    """Input: OW TimeSeriesSample with type=heart_rate_variability."""
-    return {
-        "heart_rate_variability": unit_value(sample["value"], "ms"),
-        "effective_time_frame": date_time_frame(sample["timestamp"]),
-    }
-
-
 def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Two shapes: ActivitySummary (``date`` + ``steps``) or TimeSeriesSample
     (``timestamp`` + ``type=steps`` + ``value``). The latter builds a 1-minute

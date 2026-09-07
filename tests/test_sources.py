@@ -20,7 +20,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 DATA_TYPES = [
     "heart_rate",
-    "heart_rate_variability",
     "oxygen_saturation",
     "step_count",
     "sleep_duration",
@@ -43,13 +42,6 @@ def test_converter_matches_expected(source, data_type):
 
 
 # --- source-specific edge cases ---
-
-
-def test_oura_hrv_rejects_normalized_score():
-    """Oura's daily_readiness contributors.hrv_balance is a 0-100 score, not ms."""
-    sample = {"day": "2026-04-09", "score": 85, "contributors": {"hrv_balance": 70}}
-    with pytest.raises(ConversionError, match="rmssd"):
-        convert(source="oura_raw", data_type="heart_rate_variability", sample=sample)
 
 
 def test_oura_sleep_episode_nap_is_not_main_sleep():

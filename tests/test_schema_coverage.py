@@ -80,7 +80,6 @@ SERVED_SAMPLES: dict[str, dict] = {
 SCHEMA_STATUS: frozenset[str] = frozenset({
     "omh_blood-glucose_4-0.json",
     "omh_heart-rate_2-0.json",
-    "local_heart-rate-variability_1-0.json",
     "omh_oxygen-saturation_2-0.json",
     "omh_physical-activity_1-2.json",
     "omh_sleep-duration_2-0.json",

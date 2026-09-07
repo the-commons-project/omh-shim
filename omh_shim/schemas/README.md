@@ -12,7 +12,7 @@ Pinned versions are recorded in [`_pinned.json`](_pinned.json). Don't edit that 
 ```
 omh_shim/schemas/
   metadata/     # IEEE 1752.1 envelope (data-point, data-series, header, schema-id)
-  data/         # OMH body schemas + local HRV placeholder
+  data/         # IEEE and OMH body schemas
   utility/      # Shared $ref deps (time-frame, unit-value, descriptive-statistic, ...)
 ```
 

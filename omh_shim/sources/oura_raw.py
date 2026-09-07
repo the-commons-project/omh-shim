@@ -26,34 +26,6 @@ def heart_rate(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any
     }
 
 
-def heart_rate_variability(
-    sample: Mapping[str, Any], *, tz: tzinfo | None
-) -> dict[str, Any]:
-    """Accepts ``rmssd`` or ``contributors.hrv_balance_ms`` (real ms values).
-    Rejects the normalized 0-100 ``hrv_balance`` score."""
-    if "rmssd" in sample:
-        value_ms = sample["rmssd"]
-    elif isinstance(sample.get("contributors"), dict) and "hrv_balance_ms" in sample["contributors"]:
-        value_ms = sample["contributors"]["hrv_balance_ms"]
-    else:
-        raise ConversionError(
-            "oura_raw heart_rate_variability requires either 'rmssd' or "
-            "'contributors.hrv_balance_ms' — the normalized 0-100 hrv_balance "
-            "score is not a valid HRV measurement in milliseconds"
-        )
-
-    timestamp = sample.get("timestamp") or sample.get("day")
-    if timestamp is None:
-        raise ConversionError(
-            "oura_raw heart_rate_variability requires 'timestamp' or 'day'"
-        )
-
-    return {
-        "heart_rate_variability": unit_value(value_ms, "ms"),
-        "effective_time_frame": date_time_frame(timestamp),
-    }
-
-
 def step_count(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, Any]:
     """Input: ``{"day": "2026-04-09", "steps": 8432, ...}``"""
     return {

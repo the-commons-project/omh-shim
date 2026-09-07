@@ -67,6 +67,9 @@ IEEE_API_BASE = "https://opensource.ieee.org/api/v4"
 DEFAULT_PROJECT = "omh%2F1752"
 DEFAULT_PATH = "schemas"
 OMH_REF = "main"
+
+# A parsed upstream JSON schema document, the shape omh_shim._schema_loader.load returns.
+SchemaDoc = dict[str, Any]
 MAX_PAGES = 50  # a well-behaved API pages in single digits; this only guards against one that ignores ?page=
 URLOPEN_TIMEOUT = 30  # seconds; a hung socket must not block until the job timeout
 
@@ -200,7 +203,7 @@ def is_expected_deprecation(
 
 
 def find_deprecations(
-    schemas: Mapping[str, dict],
+    schemas: Mapping[str, SchemaDoc],
     schema_ids: Mapping[str, str] | None = None,
     evidence: Mapping[str, frozenset[str]] | None = None,
 ) -> list[Finding]:
@@ -236,13 +239,13 @@ def omh_schema_url(schema_id: str, ref: str = OMH_REF) -> str:
 
 def fetch_omh_schemas(
     schema_ids: list[str], ref: str = OMH_REF
-) -> tuple[dict[str, dict], list[str]]:
+) -> tuple[dict[str, SchemaDoc], list[str]]:
     """Fetch each ``omh:`` schema from upstream. Returns (schemas, per-id failure messages).
 
     One schema that cannot be fetched or parsed is reported and skipped — it must not
     take the other checks down with it.
     """
-    schemas: dict[str, dict] = {}
+    schemas: dict[str, SchemaDoc] = {}
     failures: list[str] = []
     for schema_id in sorted(schema_ids):
         url = omh_schema_url(schema_id, ref)
@@ -308,7 +311,7 @@ def _print_table(
 
 
 def _print_deprecation_table(
-    schemas: Mapping[str, dict],
+    schemas: Mapping[str, SchemaDoc],
     schema_ids: Mapping[str, str],
     evidence: Mapping[str, frozenset[str]],
 ) -> None:

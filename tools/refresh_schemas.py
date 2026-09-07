@@ -32,6 +32,8 @@ SCHEMAS_DIR = REPO_ROOT / "omh_shim" / "schemas"
 PINNED_PATH = SCHEMAS_DIR / "_pinned.json"
 RAW_BASE = "https://raw.githubusercontent.com/openmhealth/schemas"
 IEEE_RAW_BASE = "https://opensource.ieee.org/omh/1752/-/raw"
+# IEEE's WAF allowlists CLI-client UA prefixes; a bare tool name gets an HTML challenge.
+USER_AGENT = "curl/8.7.1 omh-shim-refresh/1.0"
 
 # Top-level schemas to refresh.
 TARGETS: list[tuple[str, str]] = [
@@ -214,8 +216,7 @@ def _check_targets(
 
 
 def fetch(url: str, *, expect_json: bool = True) -> str:
-    # IEEE's WAF allowlists CLI-client UA prefixes; a bare tool name gets an HTML challenge.
-    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.7.1 omh-shim-refresh/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req) as resp:
             text = str(resp.read().decode("utf-8"))

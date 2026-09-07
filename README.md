@@ -104,7 +104,7 @@ schema declares a successor, that successor is what resolves (`sleep_duration`
 emits `ieee:total-sleep-time:1.0`). omh-shim emits only schemas published by one
 of those two standards; where neither defines a measure (heart-rate variability,
 for example) it does not convert it. Steps are carried by `physical_activity` as
-`base_movement_quantity`; there is no separate `step_count` data type.
+`base_movement_quantity`; there is no separate step-count data type.
 
 ## Served schemas without a converter
 
@@ -116,9 +116,12 @@ omh-shim also vendors body schemas that have no `convert()` converter:
   `omh:respiratory-rate:2.0`, `omh:rr-interval:1.0`.
 - `ieee:sleep-stage-summary:1.0`, served for downstream consumers that summarize
   sleep stages.
-- `omh:physical-activity:1.2` and `omh:sleep-episode:1.1`, the Open mHealth
-  bodies those two converters emitted before 2.0.0 moved them to IEEE. They stay
-  vendored so consumers can keep validating records written under the old ids.
+- `omh:physical-activity:1.2`, `omh:sleep-episode:1.1`, `omh:step-count:3.0` and
+  `omh:sleep-duration:2.0` — the Open mHealth bodies omh-shim emitted before
+  2.0.0 moved them to IEEE. Open mHealth has deprecated all four, so none may be
+  a resolution candidate; they stay vendored because they are the evidence the
+  successor invariant reads at import, and so consumers can keep validating
+  records written under the old ids.
 
 They exist so consumers can **serve and validate** these bodies offline from a
 single pinned source:

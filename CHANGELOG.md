@@ -7,13 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-07
+
+### Changed (BREAKING)
+
+- Body schemas now resolve **IEEE 1752 first, Open mHealth second**. `SCHEMA_IDS`
+  is derived from a candidate table ranked by namespace precedence rather than
+  hand-written, and import-time guards reject an unknown namespace, a candidate
+  that is not an exact name match for its data type, a malformed schema id,
+  more than one candidate per namespace, and any data type that resolves to no
+  vendored schema.
+- `physical_activity` emits `ieee:physical-activity:1.0` (was
+  `omh:physical-activity:1.2`). No converter change — IEEE's `activity_name` is
+  a free-form string and both required fields were already emitted.
+- `sleep_episode` emits `ieee:sleep-episode:1.0` (was `omh:sleep-episode:1.1`),
+  and its efficiency field is renamed `sleep_maintenance_efficiency_percentage`
+  -> `sleep_efficiency_percentage` to match IEEE. **Note:**
+  `ieee:sleep-episode:1.0` does not set `additionalProperties: false`, so the
+  old field name would have validated cleanly while IEEE-aware consumers
+  dropped it.
+
+### Removed (BREAKING)
+
+- `heart_rate_variability` is no longer a supported data type, and the
+  hand-written `local:heart-rate-variability:1.0` schema is deleted. Neither
+  IEEE 1752 nor Open mHealth publishes an HRV body schema. omh-shim no longer
+  emits any non-standard schema; the `local:` namespace is gone.
+
 ### Added
 
+- Vendored `ieee:physical-activity:1.0` and `ieee:sleep-episode:1.0` at IEEE
+  ref 1.0.2, with physical-activity's `$ref` closure
+  (`length`/`kcal`/`speed-unit-value-1.0`).
 - `ow_normalized.blood_glucose` converter, mapping an OW `TimeSeriesSample` with
   `type=blood_glucose` to `omh:blood-glucose:4.0`. The vendored blood-glucose
   schema moves out of the served-only set into `SCHEMA_IDS`. Oura does not
   currently expose glucose through its API, so there is no `oura_raw`
   counterpart; glucose reaches Open Wearables through the mobile SDK.
+
+### Fixed
+
+- `tools/refresh_schemas.py`'s IEEE fetches were silently vendoring HTML: the
+  WAF in front of the `/-/raw/` endpoint answers this tool's requests with a
+  challenge page at HTTP 200, and `fetch()` treated that response as success.
+  The fix is two-part — every response is now parsed as JSON unless explicitly
+  exempted, and the request sends a User-Agent the WAF accepts (a bare tool
+  name got the challenge page; a `curl`-prefixed UA does not). Measurement
+  showed the transport was never the problem — the User-Agent was the only
+  variable — so the endpoint is unchanged.
+
+### Upgrading
+
+- Types other than `physical_activity` and `sleep_episode` are unchanged; heart
+  rate, step count, sleep duration, SpO2 and blood glucose stay on OMH because
+  IEEE 1752 defines no equivalent body.
+- Observations already stored under `omh:physical-activity:1.2` or
+  `omh:sleep-episode:1.1` keep those codes. New records use the IEEE ids —
+  a historical split, not a validation failure.
+- JupyterHealth Exchange already seeds `ieee:physical-activity:1.0` and
+  `ieee:sleep-episode:1.0` CodeableConcepts, vendors both IEEE schemas, and
+  resolves the `ieee:` namespace, so this is a dependency bump. Deployments
+  seeded before those rows existed need a re-seed.
+- Consumers that read `heart_rate_variability` must drop it; JHE never ingested
+  it, because it resolves only the `omh` and `ieee` namespaces.
 
 ## [1.4.0] — 2026-06-21
 

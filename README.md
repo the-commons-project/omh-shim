@@ -95,13 +95,12 @@ fails schema validation.
 
 | `source` | `data_type` values |
 |---|---|
-| `oura_raw` | `heart_rate`, `heart_rate_variability`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity` |
-| `ow_normalized` | `heart_rate`, `heart_rate_variability`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity`, `blood_glucose` |
+| `oura_raw` | `heart_rate`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity` |
+| `ow_normalized` | `heart_rate`, `oxygen_saturation`, `step_count`, `sleep_duration`, `sleep_episode`, `physical_activity`, `blood_glucose` |
 
-Note: `heart_rate_variability` targets the local placeholder schema
-`local:heart-rate-variability:1.0` (Open mHealth has not published a canonical
-HRV schema as of 2026-04). The `local:` namespace is deliberate — downstream
-consumers should not assume OMH-standard interoperability for HRV records.
+Body schemas resolve IEEE 1752 first, Open mHealth second. omh-shim emits only
+schemas published by one of those two standards; where neither defines a
+measure (heart-rate variability, for example) it does not convert it.
 
 ## Served schemas without a converter
 

@@ -29,21 +29,6 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## heart_rate_variability → `local:heart-rate-variability:1.0`
-
-**OW shape:** `TimeSeriesSample` with `type=heart_rate_variability`
-
-| OW field | OMH field | Type | Notes |
-|---|---|---|---|
-| `value` | `heart_rate_variability.value` | float | ms |
-| `timestamp` | `effective_time_frame.date_time` | ISO-8601 | |
-
-### Endpoint-specific handling
-
-- **Local placeholder schema.** Same as Oura raw — `local:` namespace, not OMH-standard.
-
----
-
 ## step_count → `omh:step-count:3.0`
 
 **OW shape:** Two supported input shapes.
@@ -87,17 +72,17 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## sleep_episode → `omh:sleep-episode:1.1`
+## sleep_episode → `ieee:sleep-episode:1.0`
 
 **OW shape:** Sleep detail object
 
-| OW field | OMH field | Type | Notes |
+| OW field | Body field | Type | Notes |
 |---|---|---|---|
 | `bedtime_start` | `effective_time_frame.time_interval.start_date_time` | ISO-8601 | Required |
 | `bedtime_end` | `effective_time_frame.time_interval.end_date_time` | ISO-8601 | Required |
 | `sleep_total_duration_minutes` | `total_sleep_time.value` | int | sec (×60); optional |
 | `sleep_awake_minutes` | `wake_after_sleep_onset.value` | int | sec (×60); optional |
-| `sleep_efficiency_score` | `sleep_maintenance_efficiency_percentage.value` | float | %; optional |
+| `sleep_efficiency_score` | `sleep_efficiency_percentage.value` | float | %; optional |
 | `is_nap` | `is_main_sleep` | bool | Inverted: `is_nap=true` → `is_main_sleep=false` |
 
 ### Endpoint-specific handling
@@ -109,19 +94,19 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 | OW field | Reason |
 |---|---|
-| `sleep_deep_minutes` | OMH sleep-episode:1.1 has no per-stage breakdown |
-| `sleep_rem_minutes` | Same |
-| `sleep_light_minutes` | Same |
+| `sleep_deep_minutes` | `ieee:sleep-episode:1.0` has a per-stage breakdown, but the converter does not populate it yet |
+| `sleep_rem_minutes` | Same — schema supports it, converter doesn't map it yet |
+| `sleep_light_minutes` | Same — schema supports it, converter doesn't map it yet |
 | `sleep_time_in_bed_minutes` | Separate concept from the episode's time interval |
 | `record_id` | OW internal identifier; not health data |
 
 ---
 
-## physical_activity → `omh:physical-activity:1.2`
+## physical_activity → `ieee:physical-activity:1.0`
 
 **OW shape:** `ActivitySummary`
 
-| OW field | OMH field | Type | Notes |
+| OW field | Body field | Type | Notes |
 |---|---|---|---|
 | (hardcoded) | `activity_name` | string | Always `"daily activity summary"` |
 | `date` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
@@ -131,8 +116,8 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 ### Endpoint-specific handling
 
 - **Timezone required.** Same as all daily types.
-- **Step count not included.** OMH physical-activity:1.2 has no step-count field; use the `step_count` converter.
-- **Active minutes not modeled.** OW provides `active_minutes` but OMH physical-activity:1.2 has no field for it.
+- **Step count not included.** `ieee:physical-activity:1.0` has no step-count field; use the `step_count` converter.
+- **Active minutes not modeled.** OW provides `active_minutes` but `ieee:physical-activity:1.0` has no directly equivalent field.
 
 ### Not mapped
 

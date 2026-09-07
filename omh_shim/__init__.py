@@ -19,7 +19,7 @@ __all__ = [
     "known_ids",
     "load_schema",
 ]
-__version__ = "1.5.0"
+__version__ = "2.0.0"
 
 _NAMESPACE_PRECEDENCE: tuple[str, ...] = ("ieee", "omh")
 """Body-schema standards in preference order. No other namespace is permitted:

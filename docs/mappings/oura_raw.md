@@ -20,23 +20,6 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## heart_rate_variability → `local:heart-rate-variability:1.0`
-
-**Oura endpoint:** `/v2/usercollection/heartrate` (rmssd samples) or `/v2/usercollection/daily_readiness`
-
-| Oura field | OMH field | Type | Notes |
-|---|---|---|---|
-| `rmssd` | `heart_rate_variability.value` | float | ms — preferred source |
-| `contributors.hrv_balance_ms` | `heart_rate_variability.value` | float | ms — alternative, must be real ms |
-| `timestamp` or `day` | `effective_time_frame.date_time` | ISO-8601 | Whichever is present |
-
-### Endpoint-specific handling
-
-- **Normalized score rejected.** Oura's `daily_readiness.contributors.hrv_balance` is a 0–100 normalized score, NOT a millisecond value. The converter raises `ConversionError` if neither `rmssd` nor `contributors.hrv_balance_ms` is present. Callers must provide a sample with a real ms value.
-- **Schema is a local placeholder.** Open mHealth has not published a canonical HRV schema. The `local:` namespace prevents downstream consumers from assuming OMH-standard interoperability.
-
----
-
 ## step_count → `omh:step-count:3.0`
 
 **Oura endpoint:** `/v2/usercollection/daily_activity`
@@ -77,18 +60,18 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 ---
 
-## sleep_episode → `omh:sleep-episode:1.1`
+## sleep_episode → `ieee:sleep-episode:1.0`
 
 **Oura endpoint:** `/v2/usercollection/sleep`
 
-| Oura field | OMH field | Type | Notes |
+| Oura field | Body field | Type | Notes |
 |---|---|---|---|
 | `bedtime_start` | `effective_time_frame.time_interval.start_date_time` | ISO-8601 | Required |
 | `bedtime_end` | `effective_time_frame.time_interval.end_date_time` | ISO-8601 | Required |
 | `total_sleep_duration` | `total_sleep_time.value` | int | sec; optional |
 | `awake_time` | `wake_after_sleep_onset.value` | int | sec; optional |
 | `latency` | `latency_to_sleep_onset.value` | int | sec; optional |
-| `efficiency` | `sleep_maintenance_efficiency_percentage.value` | float | %; optional |
+| `efficiency` | `sleep_efficiency_percentage.value` | float | %; optional |
 | `type` | `is_main_sleep` | bool | `"nap"` → false, everything else → true; optional |
 
 ### Endpoint-specific handling
@@ -100,23 +83,23 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 | Oura field | Reason |
 |---|---|
-| `deep_sleep_duration` | OMH sleep-episode:1.1 has no per-stage breakdown. Could map to IEEE `sleep-episode:1.0` which supports stage durations. |
-| `light_sleep_duration` | Same — IEEE only |
-| `rem_sleep_duration` | Same — IEEE only |
+| `deep_sleep_duration` | `ieee:sleep-episode:1.0` has `deep_sleep_duration`, `light_sleep_duration`, and `rem_sleep_duration` fields, but the converter does not populate them yet. |
+| `light_sleep_duration` | Same — schema supports it, converter doesn't map it yet |
+| `rem_sleep_duration` | Same — schema supports it, converter doesn't map it yet |
 | `time_in_bed` | Separate concept from sleep episode timing |
 | `heart_rate` (nested object) | Contains time-series data. dicristea maps to IEEE `heart-rate:1.0` as a data-series record. Out of v1.0 scope. |
 | `average_heart_rate` | Summary statistic; dicristea maps to `omh:heart-rate:2.0` with `descriptive_statistic: "average"`. Out of v1.0 scope. |
 | `lowest_heart_rate` | Same, with `descriptive_statistic: "minimum"`. Out of v1.0 scope. |
 | `average_breath` | dicristea maps to `omh:respiratory-rate:2.0`. Out of v1.0 scope. |
-| `average_hrv` | No standard schema exists (see HRV note above). |
+| `average_hrv` | No IEEE or OMH schema defines HRV. |
 
 ---
 
-## physical_activity → `omh:physical-activity:1.2`
+## physical_activity → `ieee:physical-activity:1.0`
 
 **Oura endpoint:** `/v2/usercollection/daily_activity`
 
-| Oura field | OMH field | Type | Notes |
+| Oura field | Body field | Type | Notes |
 |---|---|---|---|
 | (hardcoded) | `activity_name` | string | Always `"daily activity summary"` |
 | `day` | `effective_time_frame.time_interval` | day interval | Requires `tz` |
@@ -127,7 +110,7 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 
 - **Timezone required.** Same as `step_count` — the `day` field needs explicit timezone for day bounds.
 - **Optional fields omitted when absent.** `distance` and `kcal_burned` are only set if the source field is present and non-None.
-- **Step count not included.** OMH physical-activity:1.2 has no field for step count. Steps go through the dedicated `step_count` converter.
+- **Step count not included.** `ieee:physical-activity:1.0` has no field for step count. Steps go through the dedicated `step_count` converter.
 
 ### Not mapped (gaps)
 

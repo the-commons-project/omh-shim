@@ -108,8 +108,9 @@ def test_main_json_stdout_stays_pure_json_when_filenames_are_unparsed(monkeypatc
     status = check_schema_adoption.main(["--ref", "1.0.2", "--json"])
     assert status == 0
     captured = capsys.readouterr()
-    findings = json.loads(captured.out)  # raises if the warning leaked onto stdout
-    assert findings == []
+    report = json.loads(captured.out)  # raises if the warning leaked onto stdout
+    assert report["findings"] == []
+    assert report["ieee"]["ran"] is True
     assert "::warning::" in captured.err
     assert "heart-rate-1.0.1.json" in captured.err
     assert "heart-rate-1.0.1.json" not in captured.out
@@ -293,7 +294,7 @@ def test_fetch_schema_paths_pages_until_empty(monkeypatch):
     }
     requested_pages: list[int] = []
 
-    def fake_urlopen(req):
+    def fake_urlopen(req, timeout=None):
         page = int(re.search(r"[?&]page=(\d+)", req.full_url).group(1))
         requested_pages.append(page)
         return _FakeResponse(json.dumps(responses[page]).encode())
@@ -310,14 +311,14 @@ def test_fetch_schema_paths_raises_on_non_json(monkeypatch):
     # A WAF challenge answers 200 with HTML; this must surface as an error, never as [].
     monkeypatch.setattr(
         check_schema_adoption.urllib.request, "urlopen",
-        lambda req: _FakeResponse(b"<html>blocked</html>"),
+        lambda req, timeout=None: _FakeResponse(b"<html>blocked</html>"),
     )
     with pytest.raises(RuntimeError, match="non-JSON"):
         check_schema_adoption.fetch_schema_paths("omh%2F1752", "1.0.2")
 
 
 def test_fetch_schema_paths_raises_on_request_failure(monkeypatch):
-    def fake_urlopen(req):
+    def fake_urlopen(req, timeout=None):
         raise check_schema_adoption.urllib.error.URLError("boom")
 
     monkeypatch.setattr(check_schema_adoption.urllib.request, "urlopen", fake_urlopen)
@@ -329,7 +330,7 @@ def test_fetch_schema_paths_raises_when_page_cap_exceeded(monkeypatch):
     # An API that ignores '?page=' and always returns the same non-empty page must not loop forever.
     monkeypatch.setattr(
         check_schema_adoption.urllib.request, "urlopen",
-        lambda req: _FakeResponse(json.dumps(
+        lambda req, timeout=None: _FakeResponse(json.dumps(
             [{"type": "blob", "path": "schemas/x/y-1.0.json"}]
         ).encode()),
     )
@@ -354,12 +355,13 @@ def test_main_returns_zero_with_findings_and_reports_them(monkeypatch):
     with redirect_stdout(buf):
         status = check_schema_adoption.main(["--ref", "1.0.2", "--json"])
     assert status == 0
-    findings = json.loads(buf.getvalue())
-    assert findings == [
+    report = json.loads(buf.getvalue())
+    assert report["findings"] == [
         {"data_type": "heart_rate", "measure": "heart-rate", "kind": "ADOPT",
          "versions": ["1.0"], "current": "omh:heart-rate:2.0",
          "superseded_by": "", "deprecation_date": ""},
     ]
+    assert report["ieee"] == {"ran": True, "error": "", "ref": "1.0.2"}
 
 
 def test_main_returns_nonzero_on_fetch_failure(monkeypatch, capsys):
@@ -448,16 +450,16 @@ def test_find_deprecations_flags_a_deprecation_with_no_supersededby():
 
 
 def test_is_expected_deprecation_both_branches():
-    vendored = check_schema_adoption._vendored_measures()
+    evidence = check_schema_adoption.successor_evidence()
     assert check_schema_adoption.is_expected_deprecation(
         "omh:step-count:3.0",
         "https://w3id.org/ieee/ieee-1752-schema/physical-activity.json",
-        SCHEMA_IDS, vendored,
+        SCHEMA_IDS, evidence,
     )
     assert not check_schema_adoption.is_expected_deprecation(
         "omh:step-count:3.0",
         "https://w3id.org/ieee/ieee-1752-schema/step-cadence.json",
-        SCHEMA_IDS, vendored,
+        SCHEMA_IDS, evidence,
     )
 
 
@@ -471,7 +473,7 @@ def test_omh_schema_url_uses_the_upstream_layout():
 
 
 def test_fetch_omh_schemas_reports_one_failure_without_losing_the_others(monkeypatch):
-    def fake_urlopen(req):
+    def fake_urlopen(req, timeout=None):
         if "heart-rate" in req.full_url:
             raise check_schema_adoption.urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
         return _FakeResponse(json.dumps({"type": "object"}).encode())
@@ -487,7 +489,7 @@ def test_fetch_omh_schemas_reports_non_json_as_a_failure(monkeypatch):
     # A WAF challenge answers 200 with HTML; that must be a named failure, not a schema.
     monkeypatch.setattr(
         check_schema_adoption.urllib.request, "urlopen",
-        lambda req: _FakeResponse(b"<html>blocked</html>"),
+        lambda req, timeout=None: _FakeResponse(b"<html>blocked</html>"),
     )
     schemas, failures = _REAL_FETCH_OMH_SCHEMAS(["omh:heart-rate:2.0"])
     assert schemas == {}
@@ -512,9 +514,10 @@ def test_main_json_carries_deprecation_findings(monkeypatch, capsys):
         lambda ids, ref="main": ({"omh:heart-rate:2.0": _deprecated("omh:pulse:1.0")}, []),
     )
     assert check_schema_adoption.main(["--ref", "1.0.2", "--json"]) == 0
-    findings = json.loads(capsys.readouterr().out)
-    assert [f["kind"] for f in findings] == ["DEPRECATED"]
-    assert findings[0]["superseded_by"] == "omh:pulse:1.0"
+    report = json.loads(capsys.readouterr().out)
+    assert [f["kind"] for f in report["findings"]] == ["DEPRECATED"]
+    assert report["findings"][0]["superseded_by"] == "omh:pulse:1.0"
+    assert report["omh"]["ran"] is True
 
 
 def test_main_table_shows_served_only_deprecations_as_ok(monkeypatch, capsys):
@@ -544,4 +547,148 @@ def test_main_warns_per_schema_on_an_omh_fetch_failure(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "::warning::" in captured.err
     assert "omh:heart-rate:2.0" in captured.err
-    assert json.loads(captured.out) == []
+    assert json.loads(captured.out)["findings"] == []
+
+
+# --- is_expected_deprecation: the successor must be real, live, and not the schema itself ---
+
+
+def test_find_deprecations_flags_a_newer_version_of_the_same_measure():
+    """OMH's usual deprecation shape: <measure> N -> <measure> N+1, which we do not vendor.
+
+    Matching the successor by measure name alone reads its own name back out of the
+    deprecated schema and calls it ok forever.
+    """
+    schemas = {"omh:rr-interval:1.0": _deprecated("omh:rr-interval:2.0")}
+    findings = check_schema_adoption.find_deprecations(schemas)
+    assert [f.current for f in findings] == ["omh:rr-interval:1.0"]
+    assert findings[0].superseded_by == "omh:rr-interval:2.0"
+
+
+def test_find_deprecations_flags_when_the_only_vendored_successor_is_itself_deprecated():
+    """The chain case: omh:step-count:3.0 is vendored under the name 'step-count' but is
+    deprecated, so it is not evidence that anything was acted on."""
+    schemas = {
+        "omh:rr-interval:1.0": _deprecated("https://w3id.org/ieee/ieee-1752-schema/step-count.json"),
+    }
+    assert [f.current for f in check_schema_adoption.find_deprecations(schemas)] == [
+        "omh:rr-interval:1.0"
+    ]
+
+
+def test_successor_evidence_excludes_deprecated_vendored_schemas():
+    evidence = check_schema_adoption.successor_evidence()
+    assert evidence["physical-activity"] == frozenset({"ieee:physical-activity:1.0"})
+    # Every vendored schema named step-count / sleep-duration carries a deprecation block.
+    assert "step-count" not in evidence
+    assert "sleep-duration" not in evidence
+
+
+def test_find_deprecations_still_accepts_a_cross_namespace_successor_of_the_same_name():
+    """omh:physical-activity:1.2 -> IEEE physical-activity shares the measure name but is a
+    different, live vendored schema — the acted-on case must stay ok."""
+    schemas = {
+        "omh:physical-activity:1.2": _deprecated(
+            "https://w3id.org/ieee/ieee-1752-schema/physical-activity.json"
+        ),
+    }
+    assert check_schema_adoption.find_deprecations(schemas) == []
+
+
+# --- run_omh_check: fetching nothing is "did not run", not "nothing is deprecated" ---
+
+
+def test_run_omh_check_treats_zero_fetched_as_not_having_run(monkeypatch, capsys):
+    failures = [f"omh:schema-{i}:1.0 from https://example: HTTPError: HTTP Error 429" for i in range(14)]
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas", lambda ids, ref="main": ({}, failures)
+    )
+    result = check_schema_adoption.run_omh_check(
+        "main", SCHEMA_IDS, check_schema_adoption.successor_evidence()
+    )
+    assert result.ran is False
+    assert result.findings == []
+    assert "0 of 14 omh: schema(s)" in result.error
+    assert "429" in result.error
+    err = capsys.readouterr().err
+    assert "::warning::" in err
+    assert "0 of 14" in err
+
+
+def test_run_omh_check_runs_when_at_least_one_schema_was_fetched(monkeypatch):
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, ["one failed"]),
+    )
+    result = check_schema_adoption.run_omh_check(
+        "main", SCHEMA_IDS, check_schema_adoption.successor_evidence()
+    )
+    assert result.ran is True
+    assert result.findings == []
+
+
+# --- main(): the two sources fail independently ---
+
+
+def test_main_still_reports_omh_findings_when_the_ieee_fetch_fails(monkeypatch, capsys):
+    """The 2026-08-31/09-07 WAF block must not discard the primary signal."""
+    def fake_ieee(project, ref, path=check_schema_adoption.DEFAULT_PATH):
+        raise RuntimeError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", fake_ieee)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": _deprecated("omh:pulse:1.0")}, []),
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2", "--json"]) == 0
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["omh"]["ran"] is True
+    assert report["ieee"]["ran"] is False
+    assert "403" in report["ieee"]["error"]
+    assert [f["current"] for f in report["findings"]] == ["omh:heart-rate:2.0"]
+    assert "::warning::" in captured.err
+
+
+def test_main_table_names_a_source_that_did_not_run(monkeypatch, capsys):
+    def fake_ieee(project, ref, path=check_schema_adoption.DEFAULT_PATH):
+        raise RuntimeError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", fake_ieee)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas",
+        lambda ids, ref="main": ({"omh:heart-rate:2.0": {"type": "object"}}, []),
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2"]) == 0
+    out = capsys.readouterr().out
+    assert "NOT evaluated" in out
+    assert "No findings. The resolved schema ids are current with both publishers." not in out
+
+
+def test_main_returns_nonzero_only_when_both_sources_fail(monkeypatch, capsys):
+    def fake_ieee(project, ref, path=check_schema_adoption.DEFAULT_PATH):
+        raise RuntimeError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", fake_ieee)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas", lambda ids, ref="main": ({}, ["all down"])
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2"]) == 1
+    out = capsys.readouterr().out
+    assert "Neither source was evaluated" in out
+    assert "No findings" not in out
+
+
+def test_main_json_reports_both_sources_down_and_exits_nonzero(monkeypatch, capsys):
+    def fake_ieee(project, ref, path=check_schema_adoption.DEFAULT_PATH):
+        raise RuntimeError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(check_schema_adoption, "fetch_schema_paths", fake_ieee)
+    monkeypatch.setattr(
+        check_schema_adoption, "fetch_omh_schemas", lambda ids, ref="main": ({}, ["all down"])
+    )
+    assert check_schema_adoption.main(["--ref", "1.0.2", "--json"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["omh"]["ran"] is False
+    assert report["ieee"]["ran"] is False
+    assert report["findings"] == []

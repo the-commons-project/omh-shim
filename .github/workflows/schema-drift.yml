@@ -143,12 +143,16 @@ jobs:
           STATUS=$?
           set -e
 
+          # Unconditional: every ::warning:: the tool emits — including the per-schema OMH
+          # fetch failures — belongs in the run log on the success path too, not only when
+          # the whole check dies.
+          cat adoption_err.txt
+
           if [ "$STATUS" -ne 0 ]; then
-            cat adoption_err.txt
-            echo "::warning::check_schema_adoption.py failed to run (exit $STATUS) — schema adoption findings NOT evaluated this run"
+            echo "::warning::check_schema_adoption.py failed to run (exit $STATUS) — NEITHER upstream source was evaluated this run"
             {
               echo "## Schema adoption check"
-              echo "The check failed to run this week — see the job warning above. This is NOT the same as \"no findings\"."
+              echo "Neither source could be checked this week — see the job warnings above. This is NOT the same as \"no findings\"."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "ran_ok=false" >> "$GITHUB_OUTPUT"
             echo "has_findings=false" >> "$GITHUB_OUTPUT"
@@ -156,21 +160,31 @@ jobs:
           fi
           echo "ran_ok=true" >> "$GITHUB_OUTPUT"
 
+          # The tool reports each source's status separately: a source that did not run is
+          # named here as NOT evaluated, never folded into "no findings".
           FINDINGS_BODY=$(python -c "
           import json
-          findings = json.load(open('adoption_findings.json'))
+          report = json.load(open('adoption_findings.json'))
+          findings = report['findings']
+          labels = {'omh': 'Open mHealth deprecations', 'ieee': 'IEEE 1752.1 publication'}
+          skipped = []
+          for key, label in labels.items():
+              source = report[key]
+              if not source['ran']:
+                  skipped.append(key)
+                  print(f\"- ⚠️ **{label} NOT evaluated** (ref \`{source['ref']}\`): {source['error']}\")
+          for f in findings:
+              if f['kind'] == 'DEPRECATED':
+                  when = f\" on {f['deprecation_date']}\" if f['deprecation_date'] else ''
+                  print(f\"- **DEPRECATED** \`{f['current']}\`: Open mHealth deprecated it{when} \"
+                        f\"in favor of \`{f['superseded_by'] or 'an unnamed successor'}\`\")
+                  continue
+              verb = 'IEEE now publishes' if f['kind'] == 'ADOPT' else 'IEEE publishes a newer version of'
+              print(f\"- **{f['kind']}** \`{f['data_type']}\`: {verb} \`{f['measure']}\` \"
+                    f\"({', '.join(f['versions'])}); currently resolved to \`{f['current']}\`\")
           if not findings:
-              print('No findings. The resolved schema ids are current with both publishers.')
-          else:
-              for f in findings:
-                  if f['kind'] == 'DEPRECATED':
-                      when = f\" on {f['deprecation_date']}\" if f['deprecation_date'] else ''
-                      print(f\"- **DEPRECATED** \`{f['current']}\`: Open mHealth deprecated it{when} \"
-                            f\"in favor of \`{f['superseded_by'] or 'an unnamed successor'}\`\")
-                      continue
-                  verb = 'IEEE now publishes' if f['kind'] == 'ADOPT' else 'IEEE publishes a newer version of'
-                  print(f\"- **{f['kind']}** \`{f['data_type']}\`: {verb} \`{f['measure']}\` \"
-                        f\"({', '.join(f['versions'])}); currently resolved to \`{f['current']}\`\")
+              ran = [labels[k] for k in labels if k not in skipped]
+              print(f\"- No findings from: {', '.join(ran)}.\")
           ")
 
           {
@@ -182,7 +196,7 @@ jobs:
           echo "$FINDINGS_BODY" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-          COUNT=$(python -c "import json; print(len(json.load(open('adoption_findings.json'))))")
+          COUNT=$(python -c "import json; print(len(json.load(open('adoption_findings.json'))['findings']))")
           if [ "$COUNT" -gt 0 ]; then
             echo "has_findings=true" >> "$GITHUB_OUTPUT"
           else

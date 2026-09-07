@@ -91,12 +91,8 @@ IEEE_UTILITY_TARGETS: list[tuple[str, str]] = [
     ("utility/temperature-unit-value-1.0.json", "utility/temperature-unit-value-1.0.json"),
     ("utility/body-posture-1.0.json", "utility/body-posture-1.0.json"),
     # IEEE utility refs transitively required by the sleep-stage-summary body.
-    # NB: descriptive-statistic-1.0.json is intentionally NOT tracked here — the
-    # vendored copy under that bare filename is the OMH (draft-04) variant that
-    # OMH bodies depend on, and the flat bare-filename registry can hold only one
-    # schema per filename. The relative refs from sleep-stage-summary and
-    # physical-activity resolve to that existing file; tracking the IEEE variant
-    # would overwrite and break OMH. Neither converter emits descriptive_statistic.
+    # Nested under utility/ieee/ so the IEEE w3id URI serves IEEE's 17-value enum, not OMH's 7-value one.
+    ("utility/ieee/descriptive-statistic-1.0.json", "utility/descriptive-statistic-1.0.json"),
     ("utility/percent-unit-value-1.0.json", "utility/percent-unit-value-1.0.json"),
     ("utility/descriptive-statistic-denominator-1.0.json", "utility/descriptive-statistic-denominator-1.0.json"),
     ("utility/length-unit-value-1.0.json", "utility/length-unit-value-1.0.json"),
@@ -104,8 +100,7 @@ IEEE_UTILITY_TARGETS: list[tuple[str, str]] = [
     ("utility/speed-unit-value-1.0.json", "utility/speed-unit-value-1.0.json"),
 ]
 
-# IEEE 1752 body schemas served downstream (e.g. seeded as JHE CodeableConcepts)
-# with no omh-shim converter. Pulled from opensource.ieee.org/omh/1752.
+# IEEE 1752 body schemas from opensource.ieee.org/omh/1752; only sleep-stage-summary has no converter.
 IEEE_DATA_TARGETS: list[tuple[str, str]] = [
     # (vendored path under SCHEMAS_DIR, upstream path under schemas/)
     ("data/ieee_sleep-stage-summary_1-0.json", "sleep/sleep-stage-summary-1.0.json"),
@@ -281,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     for vendored, (new_content, _diff) in all_diffs.items():
-        (SCHEMAS_DIR / vendored).write_text(new_content)
+        out_path = SCHEMAS_DIR / vendored
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(new_content)
         print(f"  wrote {vendored}")
 
     if ref_was_explicit:

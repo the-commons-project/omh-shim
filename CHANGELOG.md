@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-09-07
+## [2.0.0] — 2026-09-07
 
 ### Changed (BREAKING)
 
@@ -39,13 +39,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vendored `ieee:physical-activity:1.0` and `ieee:sleep-episode:1.0` at IEEE
   ref 1.0.2, with physical-activity's `$ref` closure
   (`length`/`kcal`/`speed-unit-value-1.0`).
-- `ow_normalized.blood_glucose` converter, mapping an OW `TimeSeriesSample` with
-  `type=blood_glucose` to `omh:blood-glucose:4.0`. The vendored blood-glucose
-  schema moves out of the served-only set into `SCHEMA_IDS`. Oura does not
-  currently expose glucose through its API, so there is no `oura_raw`
-  counterpart; glucose reaches Open Wearables through the mobile SDK.
+- Vendored IEEE's `descriptive-statistic-1.0` under `schemas/utility/ieee/`,
+  alongside the Open mHealth schema of the same filename.
 
 ### Fixed
+
+- IEEE bodies were being validated against Open mHealth's narrower
+  `descriptive-statistic` enum. IEEE's has 17 values (it adds `count`,
+  percentiles, quartiles and quintiles) where OMH's draft-04 variant has 7, and
+  the validation registry registered the single vendored OMH file under the bare
+  filename *and* both w3id permalinks — so `ieee:physical-activity:1.0` and
+  `ieee:sleep-stage-summary:1.0` rejected `descriptive_statistic: "count"`,
+  which IEEE explicitly permits. Both variants are now vendored and each is
+  registered under the URI its own standard implies: an OMH body carries no
+  `$id`, so its relative `$ref`s resolve to the bare filename and still get the
+  7-value enum, while an IEEE body's `$id` re-bases its relative `$ref`s onto
+  `https://w3id.org/ieee/ieee-1752-schema/`, which now serves IEEE's variant.
+  Six OMH bodies (`blood-glucose:4.0`, `blood-pressure:4.0`,
+  `body-temperature:4.0`, `body-weight:3.0`, `forced-vital-capacity:1.0`,
+  `forced-expiratory-volume-1-second:1.0`) `$ref` the absolute IEEE URL rather
+  than the filename, so they now accept IEEE's full enum — a widening upstream
+  OMH wrote deliberately. `omh:step-count:3.0` is the only OMH body using the
+  bare relative `$ref` and is unchanged.
 
 - `tools/refresh_schemas.py`'s IEEE fetches were silently vendoring HTML: the
   WAF in front of the `/-/raw/` endpoint answers this tool's requests with a
@@ -63,13 +78,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   IEEE 1752 defines no equivalent body.
 - Observations already stored under `omh:physical-activity:1.2` or
   `omh:sleep-episode:1.1` keep those codes. New records use the IEEE ids —
-  a historical split, not a validation failure.
+  a historical split, not a validation failure. Both Open mHealth schemas stay
+  vendored and remain available through `known_ids()` / `load_schema()`, so
+  consumers can keep validating those historical records.
 - JupyterHealth Exchange already seeds `ieee:physical-activity:1.0` and
   `ieee:sleep-episode:1.0` CodeableConcepts, vendors both IEEE schemas, and
   resolves the `ieee:` namespace, so this is a dependency bump. Deployments
   seeded before those rows existed need a re-seed.
 - Consumers that read `heart_rate_variability` must drop it; JHE never ingested
   it, because it resolves only the `omh` and `ieee` namespaces.
+
+## [1.5.0] — 2026-08-31
+
+### Added
+
+- `ow_normalized.blood_glucose` converter, mapping an OW `TimeSeriesSample` with
+  `type=blood_glucose` to `omh:blood-glucose:4.0`. The vendored blood-glucose
+  schema moves out of the served-only set into `SCHEMA_IDS`. Oura does not
+  currently expose glucose through its API, so there is no `oura_raw`
+  counterpart; glucose reaches Open Wearables through the mobile SDK.
 
 ## [1.4.0] — 2026-06-21
 

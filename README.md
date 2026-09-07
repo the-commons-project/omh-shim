@@ -104,11 +104,20 @@ measure (heart-rate variability, for example) it does not convert it.
 
 ## Served schemas without a converter
 
-omh-shim also vendors clinical OMH body schemas that have no `convert()`
-converter: blood pressure, body temperature, body weight, forced expiratory
-volume in 1 second (FEV1), forced vital capacity (FVC), respiratory rate, and
-RR interval. They exist so consumers can **serve and validate** OMH
-bodies offline from a single pinned source:
+omh-shim also vendors body schemas that have no `convert()` converter:
+
+- Clinical Open mHealth bodies — `omh:blood-pressure:4.0`,
+  `omh:body-temperature:4.0`, `omh:body-weight:3.0`,
+  `omh:forced-expiratory-volume-1-second:1.0`, `omh:forced-vital-capacity:1.0`,
+  `omh:respiratory-rate:2.0`, `omh:rr-interval:1.0`.
+- `ieee:sleep-stage-summary:1.0`, served for downstream consumers that summarize
+  sleep stages.
+- `omh:physical-activity:1.2` and `omh:sleep-episode:1.1`, the Open mHealth
+  bodies those two converters emitted before 2.0.0 moved them to IEEE. They stay
+  vendored so consumers can keep validating records written under the old ids.
+
+They exist so consumers can **serve and validate** these bodies offline from a
+single pinned source:
 
 ```python
 from omh_shim import known_ids, load_schema

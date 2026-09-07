@@ -1,4 +1,4 @@
-"""omh-shim: convert wearable health data to Open mHealth schemas."""
+"""omh-shim: convert wearable health data to IEEE 1752 and Open mHealth schemas."""
 
 from collections.abc import Mapping
 from datetime import tzinfo

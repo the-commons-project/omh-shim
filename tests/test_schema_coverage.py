@@ -260,3 +260,104 @@ def test_every_data_type_has_fixtures():
             "Each needs <data_type>_input.json + <data_type>_expected.json "
             "in at least one source under tests/fixtures/."
         )
+
+
+IEEE_DESCRIPTIVE_STATISTIC_URI = (
+    "https://w3id.org/ieee/ieee-1752-schema/descriptive-statistic-1.0.json"
+)
+OMH_DESCRIPTIVE_STATISTIC_URI = (
+    "https://w3id.org/openmhealth/schemas/omh/descriptive-statistic-1.0.json"
+)
+
+# omh:step-count:3.0 is the only OMH body that $refs descriptive-statistic by bare filename.
+STEP_COUNT_BODY: dict = {
+    "step_count": {"value": 100, "unit": "steps"},
+    "effective_time_frame": {
+        "time_interval": {
+            "start_date_time": "2026-05-31T08:00:00Z",
+            "end_date_time": "2026-05-31T09:00:00Z",
+        },
+    },
+}
+
+# These OMH bodies $ref descriptive-statistic by its absolute IEEE URL, not by filename.
+OMH_BODIES_REFERENCING_IEEE_URI: dict[str, dict] = {
+    "omh:blood-glucose:4.0": {
+        "blood_glucose": {"value": 100, "unit": "mg/dL"},
+        "effective_time_frame": {"date_time": "2026-05-31T08:00:00Z"},
+    },
+    "omh:blood-pressure:4.0": SERVED_SAMPLES["omh:blood-pressure:4.0"],
+    "omh:body-temperature:4.0": SERVED_SAMPLES["omh:body-temperature:4.0"],
+    "omh:body-weight:3.0": SERVED_SAMPLES["omh:body-weight:3.0"],
+    "omh:forced-vital-capacity:1.0": SERVED_SAMPLES["omh:forced-vital-capacity:1.0"],
+    "omh:forced-expiratory-volume-1-second:1.0": SERVED_SAMPLES[
+        "omh:forced-expiratory-volume-1-second:1.0"
+    ],
+}
+
+
+def test_descriptive_statistic_bare_name_and_ieee_uri_resolve_to_different_schemas():
+    """The bare filename serves OMH's draft-04 variant; the IEEE w3id URL serves IEEE's."""
+    resolver = _validate._registry().resolver()
+    bare = resolver.lookup("descriptive-statistic-1.0.json").contents
+    omh = resolver.lookup(OMH_DESCRIPTIVE_STATISTIC_URI).contents
+    ieee = resolver.lookup(IEEE_DESCRIPTIVE_STATISTIC_URI).contents
+
+    assert bare["$schema"] == "http://json-schema.org/draft-04/schema#"
+    assert bare == omh, "the bare filename and the OMH w3id URL must serve the same file"
+    assert bare["enum"] == [
+        "average", "maximum", "minimum", "standard deviation", "variance", "sum", "median",
+    ]
+    assert ieee["$schema"] == "http://json-schema.org/draft-07/schema#"
+    assert "count" in ieee["enum"]
+    assert len(ieee["enum"]) == 17
+    assert set(bare["enum"]) < set(ieee["enum"])
+
+
+def test_ieee_bodies_accept_every_ieee_descriptive_statistic_value():
+    """ieee:physical-activity:1.0 and ieee:sleep-stage-summary:1.0 get IEEE's full enum."""
+    ieee_enum = _validate._registry().resolver().lookup(
+        IEEE_DESCRIPTIVE_STATISTIC_URI
+    ).contents["enum"]
+    for sid, body in (
+        ("ieee:physical-activity:1.0", SERVED_SAMPLES["omh:physical-activity:1.2"]),
+        ("ieee:sleep-stage-summary:1.0", SERVED_SAMPLES["ieee:sleep-stage-summary:1.0"]),
+    ):
+        for stat in ieee_enum:
+            _validate.validate_output({**body, "descriptive_statistic": stat}, sid)
+
+
+def test_omh_bare_ref_body_still_rejects_ieee_only_descriptive_statistic():
+    """omh:step-count:3.0 keeps OMH's narrower enum — the fix did not widen everything."""
+    _validate.validate_output(STEP_COUNT_BODY, "omh:step-count:3.0")
+    for stat in ("average", "median", "sum"):
+        _validate.validate_output(
+            {**STEP_COUNT_BODY, "descriptive_statistic": stat}, "omh:step-count:3.0"
+        )
+    for stat in ("count", "20th percentile", "lower quartile", "1st quintile"):
+        with pytest.raises(ValidationError):
+            _validate.validate_output(
+                {**STEP_COUNT_BODY, "descriptive_statistic": stat}, "omh:step-count:3.0"
+            )
+
+
+def test_omh_bodies_refing_the_ieee_uri_get_the_ieee_enum():
+    """Upstream OMH points these at the IEEE URL, so they resolve IEEE's wider enum."""
+    for sid, body in OMH_BODIES_REFERENCING_IEEE_URI.items():
+        _validate.validate_output({**body, "descriptive_statistic": "average"}, sid)
+        _validate.validate_output({**body, "descriptive_statistic": "count"}, sid)
+        with pytest.raises(ValidationError):
+            _validate.validate_output({**body, "descriptive_statistic": "not-a-statistic"}, sid)
+
+
+def test_nested_utility_dir_is_not_registered_under_bare_filenames():
+    """utility/ieee/ files must not leak into the bare-filename or OMH namespaces."""
+    ieee_dir = importlib.resources.files("omh_shim.schemas").joinpath("utility", "ieee")
+    nested = {entry.name for entry in ieee_dir.iterdir() if entry.name.endswith(".json")}
+    assert nested, "utility/ieee/ must hold at least one vendored IEEE variant"
+    resolver = _validate._registry().resolver()
+    for name in nested:
+        assert (
+            resolver.lookup(name).contents
+            != resolver.lookup("https://w3id.org/ieee/ieee-1752-schema/" + name).contents
+        )

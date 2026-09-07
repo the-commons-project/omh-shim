@@ -73,9 +73,32 @@ def test_main_warns_on_unparsed_filenames(monkeypatch, capsys):
     )
     status = check_ieee_adoption.main(["--ref", "1.0.2"])
     assert status == 0
-    out = capsys.readouterr().out
-    assert "::warning::" in out
-    assert "heart-rate-1.0.1.json" in out
+    captured = capsys.readouterr()
+    # stderr, like every other warning in this tool — stdout is reserved for --json's artifact.
+    assert "::warning::" in captured.err
+    assert "heart-rate-1.0.1.json" in captured.err
+    assert "heart-rate-1.0.1.json" not in captured.out
+
+
+def test_main_json_stdout_stays_pure_json_when_filenames_are_unparsed(monkeypatch, capsys):
+    # NEW BREAKAGE 1: schema-drift.yml pipes --json's stdout straight into json.load(). A
+    # warning leaking onto stdout there corrupts the artifact and kills the workflow step.
+    monkeypatch.setattr(
+        check_ieee_adoption, "fetch_schema_paths",
+        lambda project, ref, path=check_ieee_adoption.DEFAULT_PATH: [
+            "schemas/physical_activity/physical-activity-1.0.json",
+            "schemas/sleep/sleep-episode-1.0.json",
+            "schemas/heart_rate/heart-rate-1.0.1.json",
+        ],
+    )
+    status = check_ieee_adoption.main(["--ref", "1.0.2", "--json"])
+    assert status == 0
+    captured = capsys.readouterr()
+    findings = json.loads(captured.out)  # raises if the warning leaked onto stdout
+    assert findings == []
+    assert "::warning::" in captured.err
+    assert "heart-rate-1.0.1.json" in captured.err
+    assert "heart-rate-1.0.1.json" not in captured.out
 
 
 # --- find_findings: real current state ---

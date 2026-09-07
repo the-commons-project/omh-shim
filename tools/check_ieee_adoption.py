@@ -200,15 +200,20 @@ def main(argv: list[str] | None = None) -> int:
             reason = f"canary measure(s) already vendored from this project+ref are missing: {missing}"
         print(
             f"::warning::check_ieee_adoption could not run: {reason} — "
-            f"the '{args.path}' path is likely wrong for {args.project}@{ref}. URL: {tree_url}",
+            f"either the '{args.path}' path is wrong for {args.project}@{ref}, or (only possible "
+            f"on a manually-passed --ref; the pinned tag this workflow runs at is immutable) IEEE "
+            f"genuinely retired a previously-published canary measure. URL: {tree_url}",
             file=sys.stderr,
         )
         return 1
 
     if unparsed:
+        # stderr, not stdout: --json's stdout is the machine-readable artifact (schema-drift.yml
+        # pipes it straight into json.load()) and must stay pure JSON.
         print(
             f"::warning::check_ieee_adoption: {len(unparsed)} schema filename(s) did not match "
-            f"the '<name>-<major>.<minor>.json' pattern and were skipped: {sorted(unparsed)}"
+            f"the '<name>-<major>.<minor>.json' pattern and were skipped: {sorted(unparsed)}",
+            file=sys.stderr,
         )
 
     try:

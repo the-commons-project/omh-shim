@@ -271,7 +271,9 @@ jobs:
           fi
 
       - name: Open or update issue for schema-drift findings
-        if: steps.drift.outputs.has_new == 'true' || steps.adoption.outputs.has_findings == 'true'
+        # always() — a drift-step failure (not just its early exit) must not swallow adoption
+        # findings the way NEW BREAKAGE 2 flagged; without it this step defaults to success().
+        if: always() && (steps.drift.outputs.has_new == 'true' || steps.adoption.outputs.has_findings == 'true')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PINNED_OMH: ${{ steps.drift.outputs.pinned_omh }}

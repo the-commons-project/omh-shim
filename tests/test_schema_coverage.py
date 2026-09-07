@@ -58,6 +58,23 @@ SERVED_SAMPLES: dict[str, dict] = {
             },
         },
     },
+    "ieee:physical-activity:1.0": {
+        "activity_name": "walking",
+        "effective_time_frame": {
+            "time_interval": {
+                "start_date_time": "2026-05-31T08:00:00Z",
+                "end_date_time": "2026-05-31T09:00:00Z",
+            },
+        },
+    },
+    "ieee:sleep-episode:1.0": {
+        "effective_time_frame": {
+            "time_interval": {
+                "start_date_time": "2026-05-31T23:00:00Z",
+                "end_date_time": "2026-06-01T07:00:00Z",
+            },
+        },
+    },
 }
 
 SCHEMA_STATUS: frozenset[str] = frozenset({
@@ -83,6 +100,8 @@ SERVED_NO_CONVERTER: frozenset[str] = frozenset({
     "omh_respiratory-rate_2-0.json",
     "omh_rr-interval_1-0.json",
     "ieee_sleep-stage-summary_1-0.json",
+    "ieee_physical-activity_1-0.json",
+    "ieee_sleep-episode_1-0.json",
 })
 
 NOT_RELEVANT: frozenset[str] = frozenset()

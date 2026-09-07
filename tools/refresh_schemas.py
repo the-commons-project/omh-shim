@@ -95,10 +95,14 @@ IEEE_UTILITY_TARGETS: list[tuple[str, str]] = [
     # NB: descriptive-statistic-1.0.json is intentionally NOT tracked here — the
     # vendored copy under that bare filename is the OMH (draft-04) variant that
     # OMH bodies depend on, and the flat bare-filename registry can hold only one
-    # schema per filename. sleep-stage-summary's relative ref to it resolves to
-    # that existing file; tracking the IEEE variant would overwrite and break OMH.
+    # schema per filename. The relative refs from sleep-stage-summary and
+    # physical-activity resolve to that existing file; tracking the IEEE variant
+    # would overwrite and break OMH. Neither converter emits descriptive_statistic.
     ("utility/percent-unit-value-1.0.json", "utility/percent-unit-value-1.0.json"),
     ("utility/descriptive-statistic-denominator-1.0.json", "utility/descriptive-statistic-denominator-1.0.json"),
+    ("utility/length-unit-value-1.0.json", "utility/length-unit-value-1.0.json"),
+    ("utility/kcal-unit-value-1.0.json", "utility/kcal-unit-value-1.0.json"),
+    ("utility/speed-unit-value-1.0.json", "utility/speed-unit-value-1.0.json"),
 ]
 
 # IEEE 1752 body schemas served downstream (e.g. seeded as JHE CodeableConcepts)
@@ -106,6 +110,8 @@ IEEE_UTILITY_TARGETS: list[tuple[str, str]] = [
 IEEE_DATA_TARGETS: list[tuple[str, str]] = [
     # (vendored path under SCHEMAS_DIR, upstream path under schemas/)
     ("data/ieee_sleep-stage-summary_1-0.json", "sleep/sleep-stage-summary-1.0.json"),
+    ("data/ieee_physical-activity_1-0.json", "physical_activity/physical-activity-1.0.json"),
+    ("data/ieee_sleep-episode_1-0.json", "sleep/sleep-episode-1.0.json"),
 ]
 
 

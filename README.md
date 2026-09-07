@@ -1,15 +1,17 @@
 # omh-shim
 
-Convert wearable health data from vendor schemas to [Open mHealth](https://www.openmhealth.org/) schemas.
+Convert wearable health data from vendor schemas to [IEEE 1752](https://opensource.ieee.org/omh/1752) and [Open mHealth](https://www.openmhealth.org/) schemas.
 
 ## Status
 
-v1.0 — initial public release. Public API is stable; converter coverage will continue to expand.
+v2.0 — breaking release. Body schemas now resolve IEEE 1752 first and omh-shim never
+emits a schema its publisher has deprecated, which moved three data
+types and removed two. See [CHANGELOG.md](CHANGELOG.md) before upgrading from 1.x.
 
 ## Install
 
 ```bash
-pip install git+https://github.com/jupyterhealth/omh-shim.git@v1.0.1
+pip install git+https://github.com/jupyterhealth/omh-shim.git@v2.0.0
 ```
 
 ## Usage

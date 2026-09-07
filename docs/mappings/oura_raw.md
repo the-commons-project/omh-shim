@@ -65,10 +65,10 @@ This document covers the **body** content of each converter. For the IEEE 1752.1
 | `light_sleep_duration` | Same — schema supports it, converter doesn't map it yet |
 | `rem_sleep_duration` | Same — schema supports it, converter doesn't map it yet |
 | `time_in_bed` | Separate concept from sleep episode timing |
-| `heart_rate` (nested object) | Contains time-series data. dicristea maps to IEEE `heart-rate:1.0` as a data-series record. Out of v1.0 scope. |
-| `average_heart_rate` | Summary statistic; dicristea maps to `omh:heart-rate:2.0` with `descriptive_statistic: "average"`. Out of v1.0 scope. |
-| `lowest_heart_rate` | Same, with `descriptive_statistic: "minimum"`. Out of v1.0 scope. |
-| `average_breath` | dicristea maps to `omh:respiratory-rate:2.0`. Out of v1.0 scope. |
+| `heart_rate` (nested object) | Contains time-series data. dicristea maps to IEEE `heart-rate:1.0` as a data-series record. Out of scope. |
+| `average_heart_rate` | Summary statistic; dicristea maps to `omh:heart-rate:2.0` with `descriptive_statistic: "average"`. Out of scope. |
+| `lowest_heart_rate` | Same, with `descriptive_statistic: "minimum"`. Out of scope. |
+| `average_breath` | dicristea maps to `omh:respiratory-rate:2.0`. Out of scope. |
 | `average_hrv` | No IEEE or OMH schema defines HRV. |
 
 ---

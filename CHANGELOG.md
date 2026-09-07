@@ -57,6 +57,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   IEEE 1752 nor Open mHealth publishes an HRV body schema. omh-shim no longer
   emits any non-standard schema; the `local:` namespace is gone.
 
+### Changed
+
+- The weekly adoption checker is renamed `tools/check_ieee_adoption.py` ->
+  `tools/check_schema_adoption.py` and gains the primary signal it was missing:
+  every `omh:` id in `known_ids()` — resolved and served-only — is fetched from
+  `openmhealth/schemas` at `main` and reported as `DEPRECATED` when upstream
+  carries a `deprecation` block. A deprecation on a served-only schema whose
+  declared successor is vendored as a live (non-deprecated) schema is expected
+  and reported as ok, so the four schemas listed under Added do not open an
+  issue every week. The IEEE ADOPT/NEWER check stays as the secondary signal,
+  and the two sources now run and fail independently — an IEEE outage no longer
+  discards the Open mHealth result.
+
 ### Why these two moved (the publisher said so)
 
 Neither change is a semantic judgment by omh-shim. Open mHealth ships a
@@ -83,19 +96,12 @@ lands on `ieee:total-sleep-time:1.0`.
 - Vendored `ieee:physical-activity:1.0`, `ieee:sleep-episode:1.0` and
   `ieee:total-sleep-time:1.0` at IEEE ref 1.0.2, with physical-activity's
   `$ref` closure (`length`/`kcal`/`speed-unit-value-1.0`).
-- `omh:step-count:3.0` and `omh:sleep-duration:2.0` stay vendored as served-only
-  schemas: they are the evidence the successor invariant reads, and downstream
-  consumers still validate historical records against them.
+- `omh:step-count:3.0`, `omh:sleep-duration:2.0`, `omh:physical-activity:1.2`
+  and `omh:sleep-episode:1.1` stay vendored as served-only schemas: all four are
+  deprecated upstream, they are the evidence the successor invariant reads, and
+  downstream consumers still validate historical records against them.
 - Vendored IEEE's `descriptive-statistic-1.0` under `schemas/utility/ieee/`,
   alongside the Open mHealth schema of the same filename.
-- The weekly adoption checker is renamed `tools/check_ieee_adoption.py` ->
-  `tools/check_schema_adoption.py` and gains the primary signal it was missing:
-  every `omh:` id in `known_ids()` — resolved and served-only — is fetched from
-  `openmhealth/schemas` at `main` and reported as `DEPRECATED` when upstream
-  carries a `deprecation` block. A deprecation on a served-only schema whose
-  declared successor is already vendored is expected and reported as ok, so the
-  four schemas retained above do not open an issue every week. The IEEE
-  ADOPT/NEWER check stays as the secondary signal.
 
 ### Fixed
 

@@ -24,6 +24,7 @@ import difflib
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -32,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = REPO_ROOT / "omh_shim" / "schemas"
 PINNED_PATH = SCHEMAS_DIR / "_pinned.json"
 RAW_BASE = "https://raw.githubusercontent.com/openmhealth/schemas"
-IEEE_RAW_BASE = "https://opensource.ieee.org/omh/1752/-/raw"
+IEEE_API_BASE = "https://opensource.ieee.org/api/v4/projects/omh%2F1752/repository/files"
 
 # Top-level schemas to refresh. The local HRV placeholder is excluded.
 TARGETS: list[tuple[str, str]] = [
@@ -146,6 +147,13 @@ def _resolve_ref(arg_ref: str | None, family: str) -> tuple[str, bool]:
         ) from None
 
 
+def ieee_url(ref: str, upstream: str) -> str:
+    """Build a GitLab API raw-file URL for an IEEE schema path under schemas/."""
+    # The /-/raw/ path is behind a WAF that answers this tool with an HTML challenge.
+    encoded = urllib.parse.quote(f"schemas/{upstream}", safe="")
+    return f"{IEEE_API_BASE}/{encoded}/raw?ref={ref}"
+
+
 def walk_refs(node: object) -> set[str]:
     """Collect relative-filename $refs from a JSON schema.
 
@@ -181,7 +189,7 @@ def _check_targets(
     """
     diffs: dict[str, tuple[str, str]] = {}
     for vendored, upstream in targets:
-        new_content = fetch(url_fn(ref, upstream))
+        new_content = fetch(url_fn(ref, upstream), expect_json=not follow_pointers)
         if follow_pointers and not new_content.lstrip().startswith("{"):
             pointer = new_content.strip()
             if "\n" in pointer or not pointer.endswith(".json"):
@@ -208,15 +216,22 @@ def _check_targets(
     return diffs
 
 
-def fetch(url: str) -> str:
+def fetch(url: str, *, expect_json: bool = True) -> str:
     # Some hosts (e.g. opensource.ieee.org GitLab) reject the default Python
     # User-Agent with HTTP 418, so set an explicit one.
     req = urllib.request.Request(url, headers={"User-Agent": "omh-shim-refresh/1.0"})
     try:
         with urllib.request.urlopen(req) as resp:
-            return str(resp.read().decode("utf-8"))
+            text = str(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         sys.exit(f"HTTP {e.code} fetching {url}")
+    if expect_json:
+        try:
+            json.loads(text)
+        except json.JSONDecodeError:
+            # A WAF challenge answers 200 with HTML; refuse to vendor it as a schema.
+            sys.exit(f"Non-JSON response from {url}: {text[:200]!r}")
+    return text
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -249,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ieee_diffs = _check_targets(
         IEEE_METADATA_TARGETS + IEEE_UTILITY_TARGETS + IEEE_DATA_TARGETS,
-        lambda ref, upstream: f"{IEEE_RAW_BASE}/{ref}/schemas/{upstream}",
+        ieee_url,
         ieee_ref,
     )
 

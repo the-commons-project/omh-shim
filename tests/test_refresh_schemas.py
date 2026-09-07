@@ -98,3 +98,69 @@ def test_walk_refs_collects_relative_refs():
 def test_walk_refs_handles_nested():
     schema = {"allOf": [{"$ref": "a.json"}, {"items": {"$ref": "b.json"}}]}
     assert refresh_schemas.walk_refs(schema) == {"a.json", "b.json"}
+
+
+# --- fetch content guard ---
+
+
+def test_fetch_rejects_non_json_response(monkeypatch):
+    """A WAF challenge answers 200 with HTML; it must not pass as a schema."""
+    class _FakeResponse:
+        def read(self):
+            return b"<!DOCTYPE html>\r\n<html><head><title>challenge</title>"
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
+                        lambda req: _FakeResponse())
+    with pytest.raises(SystemExit, match="Non-JSON response"):
+        refresh_schemas.fetch("https://example.invalid/schema.json")
+
+
+def test_fetch_allows_non_json_when_expect_json_false(monkeypatch):
+    """OMH '.x' pointers are bare filenames, not JSON, and must still fetch."""
+    class _FakeResponse:
+        def read(self):
+            return b"unit-value-1.1.json"
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
+                        lambda req: _FakeResponse())
+    result = refresh_schemas.fetch("https://example.invalid/unit-value-1.x.json",
+                                   expect_json=False)
+    assert result == "unit-value-1.1.json"
+
+
+def test_fetch_returns_json_body(monkeypatch):
+    class _FakeResponse:
+        def read(self):
+            return b'{"$schema": "http://json-schema.org/draft-07/schema#"}'
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(refresh_schemas.urllib.request, "urlopen",
+                        lambda req: _FakeResponse())
+    assert refresh_schemas.fetch("https://example.invalid/x.json").startswith("{")
+
+
+# --- IEEE URL construction ---
+
+
+def test_ieee_url_uses_gitlab_api_and_encodes_path():
+    url = refresh_schemas.ieee_url("1.0.2", "sleep/sleep-episode-1.0.json")
+    assert url == (
+        "https://opensource.ieee.org/api/v4/projects/omh%2F1752/repository/files/"
+        "schemas%2Fsleep%2Fsleep-episode-1.0.json/raw?ref=1.0.2"
+    )
+
+
+def test_ieee_url_does_not_use_waf_blocked_raw_path():
+    """The /-/raw/ path is served a bot-defense page for this tool's requests."""
+    assert "/-/raw/" not in refresh_schemas.ieee_url("1.0.2", "metadata/header-1.0.json")

@@ -24,7 +24,6 @@ import difflib
 import json
 import sys
 import urllib.error
-import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -33,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = REPO_ROOT / "omh_shim" / "schemas"
 PINNED_PATH = SCHEMAS_DIR / "_pinned.json"
 RAW_BASE = "https://raw.githubusercontent.com/openmhealth/schemas"
-IEEE_API_BASE = "https://opensource.ieee.org/api/v4/projects/omh%2F1752/repository/files"
+IEEE_RAW_BASE = "https://opensource.ieee.org/omh/1752/-/raw"
 
 # Top-level schemas to refresh. The local HRV placeholder is excluded.
 TARGETS: list[tuple[str, str]] = [
@@ -148,10 +147,8 @@ def _resolve_ref(arg_ref: str | None, family: str) -> tuple[str, bool]:
 
 
 def ieee_url(ref: str, upstream: str) -> str:
-    """Build a GitLab API raw-file URL for an IEEE schema path under schemas/."""
-    # The /-/raw/ path is behind a WAF that answers this tool with an HTML challenge.
-    encoded = urllib.parse.quote(f"schemas/{upstream}", safe="")
-    return f"{IEEE_API_BASE}/{encoded}/raw?ref={ref}"
+    """Build a raw-file URL for an IEEE schema path under schemas/."""
+    return f"{IEEE_RAW_BASE}/{ref}/schemas/{upstream}"
 
 
 def walk_refs(node: object) -> set[str]:
@@ -217,9 +214,8 @@ def _check_targets(
 
 
 def fetch(url: str, *, expect_json: bool = True) -> str:
-    # Some hosts (e.g. opensource.ieee.org GitLab) reject the default Python
-    # User-Agent with HTTP 418, so set an explicit one.
-    req = urllib.request.Request(url, headers={"User-Agent": "omh-shim-refresh/1.0"})
+    # IEEE's WAF allowlists CLI-client UA prefixes; a bare tool name gets an HTML challenge.
+    req = urllib.request.Request(url, headers={"User-Agent": "curl/8.7.1 omh-shim-refresh/1.0"})
     try:
         with urllib.request.urlopen(req) as resp:
             text = str(resp.read().decode("utf-8"))

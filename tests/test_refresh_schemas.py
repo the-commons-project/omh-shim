@@ -153,14 +153,12 @@ def test_fetch_returns_json_body(monkeypatch):
 # --- IEEE URL construction ---
 
 
-def test_ieee_url_uses_gitlab_api_and_encodes_path():
+def test_ieee_url_builds_raw_schema_path():
     url = refresh_schemas.ieee_url("1.0.2", "sleep/sleep-episode-1.0.json")
     assert url == (
-        "https://opensource.ieee.org/api/v4/projects/omh%2F1752/repository/files/"
-        "schemas%2Fsleep%2Fsleep-episode-1.0.json/raw?ref=1.0.2"
+        "https://opensource.ieee.org/omh/1752/-/raw/1.0.2/schemas/sleep/sleep-episode-1.0.json"
     )
 
 
-def test_ieee_url_does_not_use_waf_blocked_raw_path():
-    """The /-/raw/ path is served a bot-defense page for this tool's requests."""
-    assert "/-/raw/" not in refresh_schemas.ieee_url("1.0.2", "metadata/header-1.0.json")
+def test_ieee_url_includes_ref():
+    assert "/1.0.3/" in refresh_schemas.ieee_url("1.0.3", "metadata/header-1.0.json")

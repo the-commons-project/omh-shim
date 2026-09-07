@@ -45,16 +45,38 @@ def _successor_name(superseded_by: str) -> str:
     return tail.split(":")[1] if ":" in tail else tail
 
 
+def _vendored_omh_measures() -> frozenset[str]:
+    """Measure names of the vendored ``omh:`` schemas."""
+    return frozenset(
+        schema_id.split(":")[1]
+        for schema_id in _schema_loader.known_ids()
+        if schema_id.startswith("omh:")
+    )
+
+
 def _declared_successor(expected_name: str) -> str | None:
-    """Successor name the vendored deprecated ``omh:<expected_name>:*`` schema declares."""
-    for schema_id in _schema_loader.known_ids():
+    """Successor name the vendored deprecated ``omh:<expected_name>:*`` schema declares.
+
+    Sorted and deprecation-preferring: if two versions of the same measure were ever
+    vendored, one deprecated and one not, an unordered first-match would flip the
+    answer with ``PYTHONHASHSEED``. Returns ``None`` when no vendored ``omh:`` schema
+    of that measure is deprecated (including when none is vendored at all).
+    """
+    for schema_id in sorted(_schema_loader.known_ids()):
         namespace, name, _version = schema_id.split(":")
         if namespace != "omh" or name != expected_name:
             continue
         deprecation = _schema_loader.load(schema_id).get("deprecation")
         if deprecation is None:
-            return None
-        return _successor_name(deprecation["supersededBy"])
+            continue
+        superseded_by = deprecation.get("supersededBy")
+        if not superseded_by:
+            raise RuntimeError(
+                f"{schema_id}: deprecation block declares no 'supersededBy' — "
+                f"omh-shim cannot follow a successor its publisher did not name"
+            )
+        # The successor's namespace is discarded on purpose: rule 1 (IEEE-first) picks it.
+        return _successor_name(superseded_by)
     return None
 
 
@@ -97,9 +119,16 @@ def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
         if name != expected_name:
             successor = _declared_successor(expected_name)
             if successor is None:
+                if expected_name not in _vendored_omh_measures():
+                    raise RuntimeError(
+                        f"{data_type}: candidate {candidate!r} has name {name!r}, expected "
+                        f"{expected_name!r} — no Open mHealth schema for {expected_name!r} is "
+                        f"vendored, so no successor can be read; omh-shim does not infer equivalents"
+                    )
                 raise RuntimeError(
-                    f"{data_type}: candidate {candidate!r} has name {name!r}, "
-                    f"expected {expected_name!r} — omh-shim does not infer equivalents"
+                    f"{data_type}: candidate {candidate!r} has name {name!r}, expected "
+                    f"{expected_name!r} — vendored omh:{expected_name} is not deprecated and "
+                    f"declares no successor; omh-shim does not infer equivalents"
                 )
             if name != successor:
                 raise RuntimeError(

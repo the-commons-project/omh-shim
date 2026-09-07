@@ -491,11 +491,54 @@ def test_resolver_accepts_declared_successor():
     assert _resolve("sleep_duration", ("ieee:total-sleep-time:1.0",)) == "ieee:total-sleep-time:1.0"
 
 
-def test_resolver_rejects_undeclared_successor():
-    """total-sleep-time is not what OMH declared as heart-rate's successor (it declared none)."""
+def test_resolver_rejects_undeclared_successor_for_a_vendored_undeprecated_measure():
+    """omh:heart-rate:2.0 is vendored and healthy, so it declares no successor at all."""
     from omh_shim import _resolve
-    with pytest.raises(RuntimeError, match="infer"):
+    with pytest.raises(RuntimeError, match="not deprecated and declares no successor"):
         _resolve("heart_rate", ("ieee:total-sleep-time:1.0",))
+
+
+def test_resolver_distinguishes_an_unvendored_measure_from_an_undeprecated_one():
+    """No omh:sleep-stage-summary is vendored — a different diagnosis from the test above."""
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="no Open mHealth schema for 'sleep-stage-summary'"):
+        _resolve("sleep_stage_summary", ("ieee:total-sleep-time:1.0",))
+
+
+def test_resolver_rejects_a_candidate_that_is_not_the_declared_successor():
+    """sleep-duration's declared successor is total-sleep-time, not sleep-episode."""
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError) as excinfo:
+        _resolve("sleep_duration", ("ieee:sleep-episode:1.0",))
+    message = str(excinfo.value)
+    assert "total-sleep-time" in message
+    assert "sleep-episode" in message
+
+
+def test_declared_successor_prefers_the_deprecated_schema_and_is_order_independent(monkeypatch):
+    """Two vendored versions of one measure must not let PYTHONHASHSEED pick the answer."""
+    from omh_shim import _declared_successor, _schema_loader
+    real_known = _schema_loader.known_ids()
+    fresh, deprecated = "omh:sleep-duration:1.0", "omh:sleep-duration:2.0"
+    monkeypatch.setattr(_schema_loader, "known_ids", lambda: real_known | {fresh})
+    monkeypatch.setattr(
+        _schema_loader, "load",
+        lambda sid: {} if sid == fresh else {
+            "deprecation": {"supersededBy": "omh:total-sleep-time:1.x"}
+        } if sid == deprecated else {},
+    )
+    # fresh sorts first; a first-match-wins lookup would answer None here.
+    assert _declared_successor("sleep-duration") == "total-sleep-time"
+
+
+def test_declared_successor_raises_when_supersededby_is_missing(monkeypatch):
+    from omh_shim import _declared_successor, _schema_loader
+    monkeypatch.setattr(
+        _schema_loader, "load",
+        lambda sid: {"deprecation": {"reason": "retired"}} if sid == "omh:sleep-duration:2.0" else {},
+    )
+    with pytest.raises(RuntimeError, match="omh:sleep-duration:2.0.*supersededBy"):
+        _declared_successor("sleep-duration")
 
 
 @pytest.mark.parametrize("superseded_by,expected", [

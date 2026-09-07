@@ -62,8 +62,10 @@ def test_oura_physical_activity_omits_optional_fields_when_absent():
         sample={"day": "2026-04-09"},
         tz=UTC,
     )
-    assert "distance" not in result
-    assert "kcal_burned" not in result
+    body = result["body"]
+    assert "distance" not in body
+    assert "kcal_burned" not in body
+    assert "base_movement_quantity" not in body
 
 
 def test_oura_oxygen_saturation_rejects_missing_spo2_percentage():
@@ -83,12 +85,13 @@ def test_ow_physical_activity_omits_optional_fields_when_absent():
     result = convert(
         source="ow_normalized",
         data_type="physical_activity",
-        sample={"date": "2026-04-09", "steps": 100},
+        sample={"date": "2026-04-09"},
         tz=UTC,
     )
     body = result["body"]
     assert "distance" not in body
     assert "kcal_burned" not in body
+    assert "base_movement_quantity" not in body
     assert body["activity_name"] == "daily activity summary"
 
 

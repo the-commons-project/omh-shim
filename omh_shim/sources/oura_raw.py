@@ -55,7 +55,7 @@ def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, 
     set_optional(out, "total_sleep_time", sample, "total_sleep_duration", unit="sec", cast=int)
     set_optional(out, "wake_after_sleep_onset", sample, "awake_time", unit="sec", cast=int)
     set_optional(out, "latency_to_sleep_onset", sample, "latency", unit="sec", cast=int)
-    set_optional(out, "sleep_maintenance_efficiency_percentage", sample, "efficiency", unit="%")
+    set_optional(out, "sleep_efficiency_percentage", sample, "efficiency", unit="%")
     if (sleep_type := sample.get("type")) is not None:
         out["is_main_sleep"] = sleep_type != "nap"
     return out

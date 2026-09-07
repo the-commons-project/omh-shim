@@ -398,3 +398,97 @@ def test_validate_false_skips(monkeypatch):
                     "type": "heart_rate", "value": 72},
             validate=False)
     assert len(call_log) == 0, "validate_output should not be called when validate=False"
+
+
+# --- IEEE-first resolution ---
+
+
+def test_resolver_prefers_ieee_when_vendored():
+    """Any data type with a vendored IEEE candidate must resolve to it."""
+    from omh_shim import _SCHEMA_CANDIDATES, known_ids
+    vendored = known_ids()
+    for data_type, candidates in _SCHEMA_CANDIDATES.items():
+        if any(c.startswith("ieee:") and c in vendored for c in candidates):
+            assert SCHEMA_IDS[data_type].startswith("ieee:"), data_type
+
+
+def test_flipped_types_resolve_to_ieee():
+    assert SCHEMA_IDS["physical_activity"] == "ieee:physical-activity:1.0"
+    assert SCHEMA_IDS["sleep_episode"] == "ieee:sleep-episode:1.0"
+
+
+def test_types_without_ieee_stay_on_omh():
+    """No IEEE body exists for these measures, so OMH is the correct fallback."""
+    for data_type in ("heart_rate", "step_count", "sleep_duration",
+                      "oxygen_saturation", "blood_glucose"):
+        assert SCHEMA_IDS[data_type].startswith("omh:"), data_type
+
+
+def test_no_custom_namespaces_in_candidates():
+    from omh_shim import _NAMESPACE_PRECEDENCE, _SCHEMA_CANDIDATES
+    for candidates in _SCHEMA_CANDIDATES.values():
+        for candidate in candidates:
+            assert candidate.split(":")[0] in _NAMESPACE_PRECEDENCE, candidate
+
+
+def test_candidate_names_match_data_type():
+    """No inference: a candidate must be an exact name match, not a synonym."""
+    from omh_shim import _SCHEMA_CANDIDATES
+    for data_type, candidates in _SCHEMA_CANDIDATES.items():
+        for candidate in candidates:
+            assert candidate.split(":")[1] == data_type.replace("_", "-"), candidate
+
+
+def test_resolver_ignores_declaration_order():
+    """Precedence comes from the namespace, not from how the table is typed."""
+    from omh_shim import _resolve
+    reversed_order = ("omh:sleep-episode:1.1", "ieee:sleep-episode:1.0")
+    assert _resolve("sleep_episode", reversed_order) == "ieee:sleep-episode:1.0"
+
+
+def test_resolver_rejects_unknown_namespace():
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="namespace"):
+        _resolve("heart_rate", ("local:heart-rate:1.0",))
+
+
+def test_resolver_rejects_inferred_name():
+    """sleep_duration -> total-sleep-time is a semantic guess, not a match."""
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="name"):
+        _resolve("sleep_duration", ("ieee:total-sleep-time:1.0",))
+
+
+def test_resolver_rejects_unresolvable_type():
+    from omh_shim import _resolve
+    with pytest.raises(RuntimeError, match="no candidate is vendored"):
+        _resolve("heart_rate", ("ieee:heart-rate:1.0",))
+
+
+# --- IEEE sleep-episode field naming ---
+
+
+@pytest.mark.parametrize("source,sample", [
+    ("oura_raw", {"bedtime_start": "2026-04-09T22:30:00Z",
+                  "bedtime_end": "2026-04-10T06:45:00Z", "efficiency": 92.5}),
+    ("ow_normalized", {"bedtime_start": "2026-04-09T22:30:00Z",
+                       "bedtime_end": "2026-04-10T06:45:00Z",
+                       "sleep_efficiency_score": 92.5}),
+])
+def test_sleep_episode_uses_ieee_efficiency_field(source, sample):
+    """IEEE has no additionalProperties:false, so validation alone can't catch
+    the old field name — consumers would silently drop it."""
+    body = convert(source=source, data_type="sleep_episode", sample=sample)["body"]
+    assert body["sleep_efficiency_percentage"] == {"value": 92.5, "unit": "%"}
+    assert "sleep_maintenance_efficiency_percentage" not in body
+
+
+def test_sleep_episode_header_uses_ieee_namespace():
+    result = convert(
+        source="oura_raw", data_type="sleep_episode",
+        sample={"bedtime_start": "2026-04-09T22:30:00Z",
+                "bedtime_end": "2026-04-10T06:45:00Z"},
+    )
+    assert result["header"]["schema_id"] == {
+        "namespace": "ieee", "name": "sleep-episode", "version": "1.0",
+    }

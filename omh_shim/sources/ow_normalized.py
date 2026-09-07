@@ -73,7 +73,7 @@ def sleep_episode(sample: Mapping[str, Any], *, tz: tzinfo | None) -> dict[str, 
         unit="sec", cast=int, scale=60,
     )
     set_optional(
-        out, "sleep_maintenance_efficiency_percentage", sample,
+        out, "sleep_efficiency_percentage", sample,
         "sleep_efficiency_score", unit="%",
     )
     if (is_nap := sample.get("is_nap")) is not None:

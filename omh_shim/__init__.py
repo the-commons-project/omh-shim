@@ -21,16 +21,58 @@ __all__ = [
 ]
 __version__ = "1.5.0"
 
-SCHEMA_IDS: Mapping[str, str] = MappingProxyType({
-    "heart_rate": "omh:heart-rate:2.0",
-    "step_count": "omh:step-count:3.0",
-    "sleep_duration": "omh:sleep-duration:2.0",
-    "sleep_episode": "omh:sleep-episode:1.1",
-    "physical_activity": "omh:physical-activity:1.2",
-    "oxygen_saturation": "omh:oxygen-saturation:2.0",
-    "blood_glucose": "omh:blood-glucose:4.0",
+_NAMESPACE_PRECEDENCE: tuple[str, ...] = ("ieee", "omh")
+"""Body-schema standards in preference order. No other namespace is permitted:
+omh-shim emits standard schemas only, and converts nothing it cannot name."""
+
+_SCHEMA_CANDIDATES: Mapping[str, tuple[str, ...]] = MappingProxyType({
+    "heart_rate": ("omh:heart-rate:2.0",),
+    "step_count": ("omh:step-count:3.0",),
+    "sleep_duration": ("omh:sleep-duration:2.0",),
+    "sleep_episode": ("ieee:sleep-episode:1.0", "omh:sleep-episode:1.1"),
+    "physical_activity": ("ieee:physical-activity:1.0", "omh:physical-activity:1.2"),
+    "oxygen_saturation": ("omh:oxygen-saturation:2.0",),
+    "blood_glucose": ("omh:blood-glucose:4.0",),
 })
-"""Read-only mapping of data_type -> schema id."""
+"""data_type -> candidate schema ids. A candidate must name the same measure as
+its data_type; IEEE 1752 wins over Open mHealth when both are vendored."""
+
+
+def _resolve(data_type: str, candidates: tuple[str, ...]) -> str:
+    """Return the preferred vendored schema id for ``data_type``.
+
+    Ranks candidates by ``_NAMESPACE_PRECEDENCE`` rather than trusting the
+    order they were declared in, so a mis-typed table cannot silently emit the
+    wrong standard. Raises ``RuntimeError`` on an unknown namespace, a
+    candidate whose measure name doesn't match the data type, or a type with
+    no vendored candidate.
+    """
+    expected_name = data_type.replace("_", "-")
+    ranked = []
+    for candidate in candidates:
+        namespace, name, _version = candidate.split(":")
+        if namespace not in _NAMESPACE_PRECEDENCE:
+            raise RuntimeError(
+                f"{data_type}: unknown namespace in {candidate!r} "
+                f"(expected one of {_NAMESPACE_PRECEDENCE})"
+            )
+        if name != expected_name:
+            raise RuntimeError(
+                f"{data_type}: candidate {candidate!r} has name {name!r}, "
+                f"expected {expected_name!r} — omh-shim does not infer equivalents"
+            )
+        ranked.append((_NAMESPACE_PRECEDENCE.index(namespace), candidate))
+    vendored = _schema_loader.known_ids()
+    for _rank, candidate in sorted(ranked):
+        if candidate in vendored:
+            return candidate
+    raise RuntimeError(f"{data_type}: no candidate is vendored: {list(candidates)}")
+
+
+SCHEMA_IDS: Mapping[str, str] = MappingProxyType(
+    {dt: _resolve(dt, c) for dt, c in _SCHEMA_CANDIDATES.items()}
+)
+"""Read-only mapping of data_type -> resolved schema id."""
 
 # Fail fast if someone adds a converter without a schema id (or vice versa),
 # or a schema id without a loader filename entry. Uses raise (not assert)

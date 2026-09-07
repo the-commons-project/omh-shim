@@ -58,7 +58,7 @@ SERVED_SAMPLES: dict[str, dict] = {
             },
         },
     },
-    "ieee:physical-activity:1.0": {
+    "omh:physical-activity:1.2": {
         "activity_name": "walking",
         "effective_time_frame": {
             "time_interval": {
@@ -67,7 +67,7 @@ SERVED_SAMPLES: dict[str, dict] = {
             },
         },
     },
-    "ieee:sleep-episode:1.0": {
+    "omh:sleep-episode:1.1": {
         "effective_time_frame": {
             "time_interval": {
                 "start_date_time": "2026-05-31T23:00:00Z",
@@ -81,10 +81,10 @@ SCHEMA_STATUS: frozenset[str] = frozenset({
     "omh_blood-glucose_4-0.json",
     "omh_heart-rate_2-0.json",
     "omh_oxygen-saturation_2-0.json",
-    "omh_physical-activity_1-2.json",
     "omh_sleep-duration_2-0.json",
-    "omh_sleep-episode_1-1.json",
     "omh_step-count_3-0.json",
+    "ieee_physical-activity_1-0.json",
+    "ieee_sleep-episode_1-0.json",
 })
 
 # Body schemas vendored so downstream consumers (e.g. the JHE MCP server) can
@@ -99,8 +99,8 @@ SERVED_NO_CONVERTER: frozenset[str] = frozenset({
     "omh_respiratory-rate_2-0.json",
     "omh_rr-interval_1-0.json",
     "ieee_sleep-stage-summary_1-0.json",
-    "ieee_physical-activity_1-0.json",
-    "ieee_sleep-episode_1-0.json",
+    "omh_physical-activity_1-2.json",
+    "omh_sleep-episode_1-1.json",
 })
 
 NOT_RELEVANT: frozenset[str] = frozenset()
